@@ -4,6 +4,8 @@ A self-serve query, visualization and dashboard builder over a warehouse-style s
 
 The first build is a single-page web app with two example workspaces: League of Legends match history, and synthetic crop field trials loaded from CSV, Excel and nested JSON. It runs on claude.ai as an artifact; Ask (natural-language queries) and live project files need that runtime, and everything else also works in a plain browser.
 
+Every push to main deploys the static build to GitHub Pages (`.github/workflows/pages.yml`). That copy opens on the field-trials example, because the League snapshot is not published, and Ask and live project files show a note that they need claude.ai.
+
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the object model, processed layer, semantic layer, query engine and SQL compiler.
 
 ## Develop
@@ -11,7 +13,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the object model, processed
 ```
 npm ci
 npm run typecheck
-npm run build        # writes dist/index.html plus dist/data
+npm run build        # writes dist/index.html plus dist/data, shaped for a claude.ai artifact
+PAGES=1 npm run build  # the same page as a complete document for static hosting
 npm run smoke        # headless Chromium run over every screen (needs Playwright)
 npm run parity       # engine vs DuckDB SQL; needs Python duckdb and the Claude project files
 ```
