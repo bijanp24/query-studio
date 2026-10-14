@@ -14,6 +14,9 @@ import { Datasets } from './Datasets';
 import { Model } from './Model';
 import { Check, Sel, Txt, uid } from './ui';
 
+// The workspace a first visit opens: League on claude.ai, the field-trials example on static hosting,
+// where the League snapshot is not published.
+declare const __DEFAULT_WS__: string;
 const SEEDS: Record<string, () => Workspace> = { lol: lolWorkspace, fieldtrials: fieldTrialsWorkspace };
 interface RegEntry { id: string; name: string }
 const TABS: [Tab, string][] = [['dashboards', 'Dashboards'], ['queries', 'Queries'], ['visualizations', 'Visualizations'], ['sources', 'Data sources'], ['datasets', 'Datasets'], ['model', 'Semantic model']];
@@ -23,7 +26,7 @@ const itemDef = (ws: Workspace, id: string) => { const it = ws.items.find(i => i
 export function App() {
   const [store, setStore] = React.useState<TextStore | null>(null);
   const [registry, setRegistry] = React.useState<RegEntry[]>([]);
-  const [ws, setWs] = React.useState<Workspace>(() => (SEEDS[prefs.get('ws', 'lol')] || lolWorkspace)());
+  const [ws, setWs] = React.useState<Workspace>(() => (SEEDS[prefs.get('ws', __DEFAULT_WS__)] || lolWorkspace)());
   const [saved, setSaved] = React.useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [tab, setTab] = React.useState<Tab>((prefs.get('tab', 'dashboards') as Tab) || 'dashboards');
   const [focus, setFocus] = React.useState<string | undefined>();
@@ -44,7 +47,7 @@ export function App() {
     setStore(s);
     const reg = await s.get('registry').then(t => t ? JSON.parse(t) as RegEntry[] : []).catch(() => []);
     setRegistry(reg);
-    const id = prefs.get('ws', 'lol');
+    const id = prefs.get('ws', __DEFAULT_WS__);
     await openWs(id, s);
   }); }, []);
   async function openWs(id: string, s = store) {
