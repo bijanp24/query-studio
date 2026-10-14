@@ -1,0 +1,6 @@
+node_modules/
+dist/
+test/out/
+test/shots/
+public/data/lol/
+__pycache__/
