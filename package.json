@@ -1,0 +1,25 @@
+{
+  "name": "query-studio",
+  "version": "1.0.0",
+  "description": "Self-serve queries, visualizations and dashboards over a dimensions-and-measures semantic layer",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit -p .",
+    "parity": "esbuild test/parity.ts --bundle --platform=node --format=esm --outfile=test/out/parity.mjs --external:xlsx --log-level=warning && node test/out/parity.mjs . test/out project && python3 test/parity_check.py test/out",
+    "smoke": "node test/smoke.mjs"
+  },
+  "author": "",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "esbuild": "^0.24.2",
+    "typescript": "^5.6.3",
+    "xlsx": "^0.18.5"
+  },
+  "private": true
+}
