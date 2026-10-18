@@ -119,7 +119,8 @@ export interface Dataset {
   grain?: string;
 }
 
-export type Agg = 'sum' | 'avg' | 'median' | 'min' | 'max' | 'count' | 'count_values' | 'count_distinct' | 'rate' | 'ratio';
+/** p25 / p75 are the 25th and 75th percentiles (SQL PERCENTILE_CONT); iqr is p75 − p25, the spread of the middle half. */
+export type Agg = 'sum' | 'avg' | 'median' | 'p25' | 'p75' | 'iqr' | 'min' | 'max' | 'count' | 'count_values' | 'count_distinct' | 'rate' | 'ratio';
 /**
  * How a measure rolls up. Additive measures (CS, kills, area, value×area) sum across any dimension;
  * semi-additive ones (a balance, a rank snapshot) sum across some dimensions but not time;
@@ -218,7 +219,7 @@ export interface Query {
 
 export type VizType =
   | 'kpi' | 'gauge' | 'bar' | 'column' | 'line' | 'area' | 'hist' | 'scatter'
-  | 'heatmap' | 'table' | 'sparktable' | 'trend' | 'card';
+  | 'heatmap' | 'table' | 'sparktable' | 'trend' | 'card' | 'profile' | 'ribbon';
 
 export interface CardColumn {
   label: string;
@@ -259,6 +260,13 @@ export interface Dashboard {
   tiles: Tile[];
 }
 
+/**
+ * A suggested question shown under the Ask box. It guides a user toward the questions the
+ * workspace answers well. vizId points at a saved visualization that already answers it, so the
+ * suggestion works without the model; the text alone goes to Ask.
+ */
+export interface Suggestion { text: string; vizId?: string }
+
 export interface Workspace {
   id: string;
   name: string;
@@ -272,6 +280,7 @@ export interface Workspace {
   queries: Query[];
   visualizations: Visualization[];
   dashboards: Dashboard[];
+  suggestions?: Suggestion[];
   activeDashboard?: string;
   seedVersion?: number;
   updatedAt?: string;

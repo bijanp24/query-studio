@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Dashboard, Query, Visualization } from '../core/types';
+import type { Dashboard, Query, Suggestion, Visualization } from '../core/types';
 import { useApp, runCached } from './ctx';
 import { askJSON } from './platform';
 import { askPrompt, validateAnswer, type AskAnswer } from './askModel';
@@ -14,13 +14,16 @@ export function Ask({ dash, onAdded, onQuery }: { dash?: Dashboard; onAdded?: (v
   const [busy, setBusy] = React.useState(false);
   const [ans, setAns] = React.useState<AskAnswer | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
+  const [picked, setPicked] = React.useState<Suggestion | null>(null);
   const abort = React.useRef<AbortController | null>(null);
-  const go = async () => {
-    if (!text.trim() || busy) return;
-    setBusy(true); setErr(null); setAns(null);
+  // A question belongs to the workspace it was asked in.
+  React.useEffect(() => { abort.current?.abort(); setText(''); setAns(null); setErr(null); setPicked(null); }, [ws.id]);
+  const go = async (question = text) => {
+    if (!question.trim() || busy) return;
+    setBusy(true); setErr(null); setAns(null); setPicked(null);
     abort.current?.abort(); const ac = new AbortController(); abort.current = ac;
     try {
-      const raw = await askJSON<unknown>(askPrompt(ws, cat.tables, text.trim(), app.showHidden), ac.signal);
+      const raw = await askJSON<unknown>(askPrompt(ws, cat.tables, question.trim(), app.showHidden), ac.signal);
       const a = validateAnswer(raw, ws, cat.tables);
       if (a.error) setErr(a.error); else setAns(a);
     } catch (e) {
@@ -31,6 +34,14 @@ export function Ask({ dash, onAdded, onQuery }: { dash?: Dashboard; onAdded?: (v
   const q = ans?.query;
   const res = q ? runCached(cat, q, dash) : null;
   const v: Visualization | null = q && res ? { id: 'ask', name: ans!.visualization?.name || q.name, queryId: q.id, type: ans!.visualization?.type || autoType(res), color: 1, width: 3, window: ans!.visualization?.window || 10, labels: true, x: ans!.visualization?.x } : null;
+  // A suggestion with a saved answer shows it at once, without the model; one without goes to Ask.
+  const pick = (s: Suggestion) => {
+    setText(s.text); setErr(null); setAns(null);
+    if (s.vizId && ws.visualizations.some(x => x.id === s.vizId)) setPicked(s); else { setPicked(null); go(s.text); }
+  };
+  const pv = picked?.vizId ? ws.visualizations.find(x => x.id === picked.vizId) : undefined;
+  const pq = pv ? ws.queries.find(x => x.id === pv.queryId) : undefined;
+  const pres = pq ? runCached(cat, pq, dash) : null;
   const save = (toDash: boolean) => {
     if (!q || !v) return;
     const vz = { ...v, id: uid('v') };
@@ -45,6 +56,21 @@ export function Ask({ dash, onAdded, onQuery }: { dash?: Dashboard; onAdded?: (v
       <input value={text} onChange={e => setText(e.target.value)} placeholder={ws.id === 'lol' ? 'Ask: “win rate by champion, Riven games after the 150th count double”' : 'Ask for a number, a breakdown or a trend'} aria-label="Ask for a query" />
       <button type="submit" disabled={busy || !text.trim()}>{busy ? 'Thinking…' : 'Ask'}</button>
     </form>
+    {!!ws.suggestions?.length && !ans && !picked && <div className="suggest" aria-label="Suggested questions">
+      <span className="small muted">Try</span>
+      {ws.suggestions.map((s, i) => <button key={i} type="button" className="chip" onClick={() => pick(s)}>{s.text}</button>)}
+    </div>}
+    {picked && pv && pq && pres && <div className="askres">
+      <div className="askhead"><b>{pv.name}</b><span className="muted small">{ws.datasets.find(d => d.id === pq.dataset)?.name} · {pres.n.toLocaleString()} {pres.grain}s · a saved answer to “{picked.text}”</span></div>
+      {pv.note && <div className="small">{pv.note}</div>}
+      <div className="askviz"><Viz v={pv} res={pres} cat={cat} /></div>
+      <div className="inline">
+        {onAdded && <button onClick={() => { onAdded(pv.id); setPicked(null); app.toast('Added to the dashboard'); }}>Add to dashboard</button>}
+        {onAdded && <button className="ghost" onClick={() => app.go('queries', pq.id)}>Open in the builder</button>}
+        <button className="ghost" onClick={() => go(picked.text)}>Ask Claude instead</button>
+        <button className="ghost" onClick={() => { setPicked(null); setText(''); }}>Close</button>
+      </div>
+    </div>}
     {err && <div className="warn small">{err}</div>}
     {ans && q && res && v && <div className="askres">
       <div className="askhead"><b>{v.name}</b><span className="muted small">{ws.datasets.find(d => d.id === q.dataset)?.name} · {res.n.toLocaleString()} {res.grain}s{q.weight ? ` · weighted by ${q.weight}` : ''}</span></div>

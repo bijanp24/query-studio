@@ -17,11 +17,16 @@ const str = (s: string) => "'" + s.replace(/'/g, "''") + "'";
 const isNumLit = (s: string) => /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(s.trim());
 const textType = (d: Dialect) => d === 'bigquery' ? 'STRING' : 'VARCHAR';
 
-function aggSQL(agg: Agg, e: string, d: Dialect) {
+function aggSQL(agg: Agg, e: string, d: Dialect): string {
   switch (agg) {
     case 'sum': return `SUM(${e})`;
     case 'avg': case 'rate': return `AVG(${e})`;
     case 'median': return d === 'duckdb' || d === 'redshift' ? `MEDIAN(${e})` : d === 'bigquery' ? `APPROX_QUANTILES(${e}, 2)[OFFSET(1)]` : `PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ${e})`;
+    case 'p25': case 'p75': {
+      const p = agg === 'p25' ? 0.25 : 0.75;
+      return d === 'duckdb' ? `QUANTILE_CONT(${e}, ${p})` : d === 'bigquery' ? `APPROX_QUANTILES(${e}, 4)[OFFSET(${agg === 'p25' ? 1 : 3})]` : `PERCENTILE_CONT(${p}) WITHIN GROUP (ORDER BY ${e})`;
+    }
+    case 'iqr': return `(${aggSQL('p75', e, d)} - ${aggSQL('p25', e, d)})`;
     case 'min': return `MIN(${e})`;
     case 'max': return `MAX(${e})`;
     case 'count': return 'COUNT(*)';
@@ -162,6 +167,7 @@ export function compileQuery(ws: Workspace, tables: Record<string, Table | undef
     }
 
     notes.push(`Series operator "${op}" over a ${win}-${ds?.grain || 'row'} window, ordered by ${ds?.sequence}.`);
+    if (d !== 'duckdb' && ['median', 'p25', 'p75', 'iqr'].includes(m.agg)) notes.push('PostgreSQL, Redshift and BigQuery do not run percentiles as window functions; run this series on DuckDB.');
   } else if (q.groupBy.length) {
     const sel = [...dimSQL, 'COUNT(*) AS n', ...ms.map((m, k) => `${M(m)} AS m${k + 1}`)];
     const having = [`${M(ms[0])} IS NOT NULL`];

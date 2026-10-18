@@ -7,6 +7,7 @@ import { fmt, measureFn, pointsOf, reference, seriesOf, WEEKDAY_ORDER, type Cata
 import { fieldExpr, fieldsFor, missingColumns, resolveMeasure, type ResolvedMeasure } from '../../core/semantic';
 import { ols, welch, mean } from '../../core/stats';
 import { toNum } from '../../core/expr';
+import { profileOf, type Profile } from '../../core/profile';
 
 export const PALETTE = 8;
 // Charts draw at the width they get, so text stays the same size on a phone and a full-width tile.
@@ -433,6 +434,64 @@ function Trend({ v, res, cat }: { v: Visualization; res: Result; cat: Catalog })
   </>;
 }
 
+// ---------- player card: Baseline, Consistency, Peak, Trend for every measure of the query ----------
+const VERDICT_TEXT: Record<Profile['verdict'], string> = { improving: 'Improving', declining: 'Declining', rising: 'Rising', falling: 'Falling', 'no clear trend': 'No clear trend' };
+function ProfileCard({ v, res, cat }: { v: Visualization; res: Result; cat: Catalog }) {
+  const win = v.window || 20;
+  const cards = res.measures.map(m => ({ m, p: profileOf(measureFn(m), res.rows, win) })).filter((c): c is { m: ResolvedMeasure; p: Profile } => !!c.p);
+  if (!cards.length) return <Empty msg={`Needs at least 3 ${res.grain}s with a value.`} />;
+  const g = res.grain;
+  return <>
+    <div className="profile">
+      {cards.map(({ m, p }, i) => <div key={i} className="pcard">
+        <div className="pl">{m.label}</div>
+        <div className="pk">Baseline</div>
+        <div className="pv">{F(p.baseline, m)}</div>
+        <dl>
+          <dt>Consistency</dt><dd>{F(p.p25, m)} to {F(p.p75, m)}<span className="muted"> · middle half of {p.spreadOf === 'rows' ? `single ${g}s` : `${p.window}-${g} stretches`}</span></dd>
+          <dt>Peak</dt><dd>{F(p.peak, m)}<span className="muted"> · best {p.window}-{g} stretch{p.peakRow ? `, to ${seqText(res, p.peakRow, cat)}` : ''}</span></dd>
+          <dt>Trend</dt><dd>{F(p.trend, m, true)} per {p.per} {g}s{p.trendLow != null && <span className="muted"> · 95% range {F(p.trendLow, m, true)} to {F(p.trendHigh, m, true)}</span>}</dd>
+        </dl>
+        <span className={'vchip2 ' + (p.good === true ? 'up' : p.good === false ? 'down' : p.verdict === 'no clear trend' ? 'flat' : 'side')}>{VERDICT_TEXT[p.verdict]}</span>
+      </div>)}
+    </div>
+    <div className="small muted">{cards[0].p.n} {g}s{res.query.weight ? `, weighted by ${res.query.weight}` : ''}. Baseline is each measure over all of them. A trend is called only when its 95% range excludes zero. The peak is the best {cards[0].p.window}-{g} stretch, so it sits above the baseline by luck alone; read the two together.</div>
+  </>;
+}
+
+// ---------- ribbon: rolling baseline, the middle half of each window, single rows, and the peak ----------
+function Ribbon({ v, res, cat }: { v: Visualization; res: Result; cat: Catalog }) {
+  const m = res.measures[0]; if (!m) return <Empty />;
+  const p = profileOf(measureFn(m), res.rows, v.window || 20);
+  if (!p || p.bands.length < 2) return <Empty msg={`Needs more ${res.grain}s than the ${v.window || 20}-${res.grain} window to draw a ribbon.`} />;
+  const raw = pointsOf(measureFn(m), res.rows);
+  const rate = isPct(m) || raw.every(x => x.v === 0 || x.v === 1);
+  const all = [...p.bands.flatMap(b => [b.lo, b.hi, b.v]), ...(rate ? [] : raw.map(x => x.v))];
+  let lo = Math.min(...all), hi = Math.max(...all);
+  if (rate) { lo = Math.max(0, lo); hi = Math.min(1, hi); }
+  if (hi === lo) hi = lo + 1;
+  const W = useW(), H = 220, pl = 46, pr = 12, pt = 10, pb = 26;
+  const X = (i: number) => pl + i / Math.max(1, raw.length - 1) * (W - pl - pr), Y = (val: number) => pt + (1 - (val - lo) / (hi - lo)) * (H - pt - pb);
+  const line = p.bands.map((b, k) => (k ? 'L' : 'M') + X(b.i).toFixed(1) + ',' + Y(b.v).toFixed(1)).join(' ');
+  const band = p.bands.map((b, k) => (k ? 'L' : 'M') + X(b.i).toFixed(1) + ',' + Y(b.hi).toFixed(1)).join(' ') + ' ' + [...p.bands].reverse().map(b => 'L' + X(b.i).toFixed(1) + ',' + Y(b.lo).toFixed(1)).join(' ') + ' Z';
+  const pk = p.bands.find(b => b.row === p.peakRow);
+  const last = p.bands[p.bands.length - 1];
+  return <>
+    <svg viewBox={`0 0 ${W} ${H}`} role="img">
+      {niceTicks(lo, hi, 4).filter(tv => tv >= lo && tv <= hi).map(tv => <g key={tv}><line x1={pl} x2={W - pr} y1={Y(tv)} y2={Y(tv)} className="grid" /><text x={pl - 6} y={Y(tv) + 4} textAnchor="end" className="ax">{F(tv, m)}</text></g>)}
+      <text x={pl} y={H - 6} className="ax">{seqText(res, raw[0].row, cat) || 'first'}</text><text x={W - pr} y={H - 6} textAnchor="end" className="ax">{seqText(res, raw[raw.length - 1].row, cat) || 'last'}</text>
+      <path d={band} fill={color(v.color)} opacity={0.16} />
+      {!rate && raw.map((x, i) => <circle key={i} cx={X(i)} cy={Y(x.v)} r={2} fill="var(--text-2)" opacity={0.35}><title>{`${seqText(res, x.row, cat)}: ${F(x.v, m)}`}</title></circle>)}
+      <path d={line} fill="none" stroke={color(v.color)} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+      {p.bands.map((b, k) => <circle key={k} cx={X(b.i)} cy={Y(b.v)} r={6} fill="transparent"><title>{`${seqText(res, b.row, cat)}: baseline ${F(b.v, m)}, middle half ${F(b.lo, m)} to ${F(b.hi, m)}`}</title></circle>)}
+      {pk && <circle cx={X(pk.i)} cy={Y(pk.v)} r={6} fill="none" stroke={color(v.color, 1)} strokeWidth={2} />}
+      <circle cx={X(last.i)} cy={Y(last.v)} r={4} fill={color(v.color)} stroke="var(--surface)" strokeWidth={2} />
+      {v.labels !== false && <text x={X(last.i) - 6} y={Y(last.v) - 8} textAnchor="end" className="lab">{F(last.v, m)}</text>}
+    </svg>
+    <Legend items={[[color(v.color), `${p.window}-${res.grain} baseline (${m.label}), band: middle half of each window`], [color(v.color, 1), `peak ${F(p.peak, m)}`]]} />
+  </>;
+}
+
 // ---------- comparison card: rows of measures × columns of groups to compare with ----------
 function Card({ v, res, cat }: { v: Visualization; res: Result; cat: Catalog }) {
   const card = v.card;
@@ -486,6 +545,7 @@ export const VIZ_TYPES: { id: Visualization['type']; name: string; needs?: strin
   { id: 'bar', name: 'Bars (horizontal)' }, { id: 'column', name: 'Columns' }, { id: 'line', name: 'Line' }, { id: 'area', name: 'Area' },
   { id: 'hist', name: 'Histogram' }, { id: 'scatter', name: 'Scatter' }, { id: 'heatmap', name: 'Heatmap', needs: 'two group-bys' },
   { id: 'table', name: 'Table' }, { id: 'sparktable', name: 'Trend table', needs: 'a group-by' }, { id: 'card', name: 'Comparison card' },
+  { id: 'profile', name: 'Player card (baseline, consistency, peak, trend)' }, { id: 'ribbon', name: 'Ribbon (rolling baseline and spread)' },
 ];
 
 export function Viz(props: { v: Visualization; res: Result; cat: Catalog }) {
@@ -518,6 +578,8 @@ function VizInner({ v, res, cat }: { v: Visualization; res: Result; cat: Catalog
     case 'sparktable': return <SparkTable v={v} res={res} cat={cat} />;
     case 'trend': return <Trend v={v} res={res} cat={cat} />;
     case 'card': return <Card v={v} res={res} cat={cat} />;
+    case 'profile': return <ProfileCard v={v} res={res} cat={cat} />;
+    case 'ribbon': return <Ribbon v={v} res={res} cat={cat} />;
   }
   return <Empty msg={`Unknown visualization ${v.type}`} />;
 }

@@ -6,8 +6,8 @@ import { fieldsFor } from '../core/semantic';
 import { FUNCS, tryCompile, columnsOf } from '../core/expr';
 import { uid } from './ui';
 
-const AGGS: Agg[] = ['sum', 'avg', 'median', 'min', 'max', 'count', 'count_values', 'count_distinct', 'rate', 'ratio'];
-const VIZ: VizType[] = ['kpi', 'gauge', 'bar', 'column', 'line', 'area', 'hist', 'scatter', 'heatmap', 'table', 'sparktable', 'trend', 'card'];
+const AGGS: Agg[] = ['sum', 'avg', 'median', 'p25', 'p75', 'iqr', 'min', 'max', 'count', 'count_values', 'count_distinct', 'rate', 'ratio'];
+const VIZ: VizType[] = ['kpi', 'gauge', 'bar', 'column', 'line', 'area', 'hist', 'scatter', 'heatmap', 'table', 'sparktable', 'trend', 'profile', 'ribbon', 'card'];
 
 export function askPrompt(ws: Workspace, tables: Record<string, Table | undefined>, question: string, showHidden: boolean): string {
   const lines: string[] = [];
@@ -31,8 +31,8 @@ export function askPrompt(ws: Workspace, tables: Record<string, Table | undefine
   "series"?: {"op": "rolling"|"delta"|"slope"|"cumulative", "window": number},   // window functions along the sequence: rolling average, change vs previous window, rate of change per 10 rows, running total
   "compare": {"kind":"none"} | {"kind":"previous"} (needs last) | {"kind":"target","value":number,"label":string} | {"kind":"paired","field": measure field or column on the same rows,"label":string} | {"kind":"reference","dataset": id,"filters":[...],"weightBy":[dimension ids shared by both datasets],"label":string}
 }
-Agg = ${AGGS.join(' | ')}. "rate" is the average of a 0/1 column shown as a percent. "ratio" = Σ expr ÷ Σ denominator (a weighted average from additive parts, e.g. total CS ÷ total minutes).
-VizType = ${VIZ.join(' | ')}. kpi = one number with its comparison; trend = is a measure improving over the rows, with a t-test (no groupBy, use last); line/area need series or a time grain; bar/column need one groupBy; heatmap needs two; table suits rollup and several measures; sparktable = groups with a rolling sparkline each; card is only for existing comparison cards.
+Agg = ${AGGS.join(' | ')}. p25 / p75 = the 25th and 75th percentile, iqr = p75 minus p25 (spread of the middle half; not weightable). "rate" is the average of a 0/1 column shown as a percent. "ratio" = Σ expr ÷ Σ denominator (a weighted average from additive parts, e.g. total CS ÷ total minutes).
+VizType = ${VIZ.join(' | ')}. kpi = one number with its comparison; trend = is a measure improving over the rows, with a t-test (no groupBy, use last); line/area need series or a time grain; bar/column need one groupBy; heatmap needs two; table suits rollup and several measures; sparktable = groups with a rolling sparkline each; profile = player card with Baseline (the measure over all rows), Consistency (middle half, p25 to p75), Peak (best rolling window) and Trend (change per 100 rows with a 95% range) for each measure (no groupBy, usually last 0, several measures allowed); ribbon = rolling baseline line with the middle-half band and the peak marked (one measure, no groupBy); card is only for existing comparison cards.
 Formula language: column names, numbers, 'text', + - * / %, = != < > <= >=, and, or, not, and the functions ${Object.values(FUNCS).map(f => f.doc).join('; ')}.`);
   lines.push('');
   lines.push('Rules: use field ids exactly as listed. Prefer a listed measure over a formula. Additive measures may be summed; non-additive ones (averages, rates, ratios) must not be summed, average them or build a ratio. "Weighted by X" or "count X more" means query.weight. "Per game" or "average" on a per-row value means avg. When a question compares with a population, use compare kind reference with weightBy on the dimensions that make it like for like. Keep hidden fields out unless the question names them.');
