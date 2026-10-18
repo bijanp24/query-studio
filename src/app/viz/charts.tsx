@@ -8,6 +8,7 @@ import { fieldExpr, fieldsFor, missingColumns, resolveMeasure, type ResolvedMeas
 import { ols, welch, mean, quantile } from '../../core/stats';
 import { compile, evaluate, toNum } from '../../core/expr';
 import { distribution, ordinal, type BinCount, type DistSummary } from '../../core/distribution';
+import { flowOf, type FlowSummary } from '../../core/flow';
 import { profileOf, type Profile } from '../../core/profile';
 
 export const PALETTE = 8;
@@ -523,6 +524,90 @@ function Trend({ v, res, cat }: { v: Visualization; res: Result; cat: Catalog })
   </>;
 }
 
+
+// ---------- flow: where each "from" category went ----------
+export function flowFor(res: Result, cat: Catalog): { f: FlowSummary | null; msg?: string } {
+  const q = res.query;
+  if (q.groupBy.length !== 2 || !res.groups) return { f: null, msg: 'A flow needs a query grouped by two fields: where rows started and where they ended up.' };
+  const fields = fieldsFor(cat.ws, res.datasetId, cat.tables[res.datasetId]);
+  // Each side orders its categories by its own sortBy; a category seen on both sides keeps the first order found.
+  const order = new Map<string, number>();
+  q.groupBy.forEach((gb, side) => {
+    const src = fields.find(x => x.id === gb.field)?.sortBy; if (!src) return;
+    let n; try { n = compile(src); } catch { return; }
+    for (const g of res.groups!) { const k = g.keys[side]; if (k == null || order.has(String(k)) || !g.rows[0]) continue; const v = toNum(evaluate(n, g.rows[0])); if (v != null) order.set(String(k), v); }
+  });
+  const cells = res.groups.filter(g => g.keys[0] != null && g.keys[1] != null && g.values[0] != null).map(g => ({ from: String(g.keys[0]), to: String(g.keys[1]), n: g.values[0] as number }));
+  return { f: flowOf(cells, k => order.get(k) ?? null) };
+}
+
+function Flow({ v, res, cat }: { v: Visualization; res: Result; cat: Catalog }) {
+  const { f, msg } = flowFor(res, cat);
+  if (!f) return <Empty msg={msg} />;
+  const W = useW(), g = res.measures[0]?.agg === 'count' ? `${res.grain}s` : res.measures[0]?.label || `${res.grain}s`, pct = (x: number) => (x / f.total * 100).toFixed(1) + '%';
+  const dirColor = { up: 'var(--ok)', down: 'var(--bad)', same: 'var(--text-3)', changed: color(v.color) };
+  const fields = fieldsFor(cat.ws, res.datasetId, cat.tables[res.datasetId]);
+  const sideLabel = (i: number) => fields.find(x => x.id === res.query.groupBy[i].field)?.label || res.query.groupBy[i].field;
+  const readout = <div className="trendstats">
+    {f.ordered ? <>
+      <div><div className="k">stayed</div><div className="v">{pct(f.stayed)}</div><div className="small muted">{f.stayed.toLocaleString()} {g}</div></div>
+      <div><div className="k">moved up</div><div className="v pos">{pct(f.up)}</div><div className="small muted">{f.up.toLocaleString()} {g}</div></div>
+      <div><div className="k">moved down</div><div className="v neg">{pct(f.down)}</div><div className="small muted">{f.down.toLocaleString()} {g}</div></div>
+    </> : <>
+      <div><div className="k">stayed</div><div className="v">{pct(f.stayed)}</div></div>
+      <div><div className="k">changed</div><div className="v">{pct(f.changed)}</div></div>
+      <div />
+    </>}
+    <div><div className="k">net change</div><div className="v">{f.gainer ? `${f.gainer.key} +${(f.gainer.in - f.gainer.out).toLocaleString()}` : '—'}</div><div className="small muted">{f.loser ? `${f.loser.key} ${(f.loser.in - f.loser.out).toLocaleString()}` : ''}</div></div>
+  </div>;
+  // Many categories: a matrix of row shares (where each starting category went) reads better than bands.
+  if (f.nodes.length > 12) {
+    const from = f.nodes.filter(x => x.out > 0), to = f.nodes.filter(x => x.in > 0);
+    const cw = Math.max(12, Math.min(28, Math.floor((W - 96) / to.length))), ch = Math.max(12, Math.min(20, cw)), pl = 90, pt = 60;
+    const Wm = pl + cw * to.length + 6, Hm = pt + ch * from.length + 4;
+    const cell = new Map(f.cells.map(c => [c.from + '\u0001' + c.to, c]));
+    return <>
+      <div className="tscroll"><svg viewBox={`0 0 ${Wm} ${Hm}`} role="img" style={{ maxWidth: Wm }} aria-label={`Flow from ${sideLabel(0)} to ${sideLabel(1)}`}>
+        {to.map((t, j) => <text key={t.key} x={pl + j * cw + cw / 2} y={pt - 6} transform={`rotate(-55 ${pl + j * cw + cw / 2} ${pt - 6})`} className="ax">{t.key.slice(0, 11)}</text>)}
+        {from.map((s, i) => <g key={s.key}>
+          <text x={pl - 6} y={pt + i * ch + ch / 2 + 4} textAnchor="end" className="lab">{s.key.slice(0, 12)}</text>
+          {to.map((t, j) => { const c = cell.get(s.key + '\u0001' + t.key); if (!c) return null; const share = c.n / s.out; return <rect key={t.key} x={pl + j * cw + 1} y={pt + i * ch + 1} width={cw - 2} height={ch - 2} rx={2} fill={dirColor[c.dir]} opacity={0.15 + 0.85 * Math.sqrt(share)}><title>{`${s.key} → ${t.key}: ${c.n.toLocaleString()} ${g}, ${(share * 100).toFixed(1)}% of ${s.key}`}</title></rect>; })}
+        </g>)}
+      </svg></div>
+      <Legend items={[['var(--ok)', 'moved up'], ['var(--text-3)', 'stayed'], ['var(--bad)', 'moved down'], ['var(--surface-2)', `rows: ${sideLabel(0)}; columns: ${sideLabel(1)}; darker = larger share of the row`]]} />
+      {readout}
+    </>;
+  }
+  // Few categories: bands from each starting category (left) to where it ended up (right), highest first.
+  const nodes = [...f.nodes].reverse();
+  const H = Math.max(220, nodes.length * 34), pt = 8, pb = 8, gap = 6, nw = 12, lw = Math.min(110, W * 0.22);
+  const x0 = lw, x1 = W - lw;
+  const scale = (H - pt - pb - gap * (nodes.length - 1)) / f.total;
+  const place = (side: 'out' | 'in') => { let y = pt; const m = new Map<string, number>(); for (const n of nodes) { m.set(n.key, y); y += n[side] * scale + (n[side] ? gap : 0); } return m; };
+  const yl = place('out'), yr = place('in');
+  const rank = new Map(nodes.map((n, i) => [n.key, i]));
+  const offL = new Map<string, number>(), offR = new Map<string, number>();
+  const bands = [...f.cells].sort((a, b) => rank.get(a.from)! - rank.get(b.from)! || rank.get(a.to)! - rank.get(b.to)!).map(c => {
+    const h = c.n * scale;
+    const ya = yl.get(c.from)! + (offL.get(c.from) || 0); offL.set(c.from, (offL.get(c.from) || 0) + h);
+    return { c, h, ya };
+  });
+  // Right-hand offsets go in order of where the band came from, so bands do not cross inside a node.
+  [...bands].sort((a, b) => rank.get(a.c.to)! - rank.get(b.c.to)! || rank.get(a.c.from)! - rank.get(b.c.from)!).forEach(b => { (b as typeof b & { yb: number }).yb = yr.get(b.c.to)! + (offR.get(b.c.to) || 0); offR.set(b.c.to, (offR.get(b.c.to) || 0) + b.h); });
+  const mx = (x0 + nw + x1) / 2;
+  return <>
+    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Flow from ${sideLabel(0)} to ${sideLabel(1)}: ${pct(f.stayed)} stayed${f.ordered ? `, ${pct(f.up)} moved up, ${pct(f.down)} moved down` : ''}`}>
+      {bands.map((b, i) => { const yb = (b as typeof b & { yb: number }).yb; return <path key={i} d={`M${x0 + nw},${b.ya} C${mx},${b.ya} ${mx},${yb} ${x1},${yb} L${x1},${yb + b.h} C${mx},${yb + b.h} ${mx},${b.ya + b.h} ${x0 + nw},${b.ya + b.h} Z`} fill={dirColor[b.c.dir]} opacity={b.c.dir === 'same' ? 0.28 : 0.55}><title>{`${b.c.from} → ${b.c.to}: ${b.c.n.toLocaleString()} ${g} (${(b.c.n / f.nodes.find(n => n.key === b.c.from)!.out * 100).toFixed(1)}% of ${b.c.from})`}</title></path>; })}
+      {nodes.map(n => <g key={n.key}>
+        {n.out > 0 && <><rect x={x0} y={yl.get(n.key)} width={nw} height={Math.max(1, n.out * scale)} rx={2} fill={color(v.color)} /><text x={x0 - 6} y={yl.get(n.key)! + n.out * scale / 2 + 4} textAnchor="end" className="lab">{n.key} <tspan className="ax">{n.out.toLocaleString()}</tspan></text></>}
+        {n.in > 0 && <><rect x={x1} y={yr.get(n.key)} width={nw} height={Math.max(1, n.in * scale)} rx={2} fill={color(v.color)} /><text x={x1 + nw + 6} y={yr.get(n.key)! + n.in * scale / 2 + 4} className="lab">{n.key} <tspan className="ax">{n.in.toLocaleString()}</tspan></text></>}
+      </g>)}
+    </svg>
+    <Legend items={[...(f.ordered ? [['var(--ok)', 'moved up'], ['var(--bad)', 'moved down']] as [string, string][] : [[color(v.color), 'changed'] as [string, string]]), ['var(--text-3)', 'stayed'], ['var(--surface-2)', `left: ${sideLabel(0)}; right: ${sideLabel(1)}`]]} />
+    {readout}
+  </>;
+}
+
 // ---------- player card: Baseline, Consistency, Peak, Trend for every measure of the query ----------
 const VERDICT_TEXT: Record<Profile['verdict'], string> = { improving: 'Improving', declining: 'Declining', rising: 'Rising', falling: 'Falling', 'no clear trend': 'No clear trend' };
 function ProfileCard({ v, res, cat }: { v: Visualization; res: Result; cat: Catalog }) {
@@ -636,6 +721,7 @@ export const VIZ_TYPES: { id: Visualization['type']; name: string; needs?: strin
   { id: 'table', name: 'Table' }, { id: 'sparktable', name: 'Trend table', needs: 'a group-by' }, { id: 'card', name: 'Comparison card' },
   { id: 'profile', name: 'Player card (baseline, consistency, peak, trend)' }, { id: 'ribbon', name: 'Ribbon (rolling baseline and spread)' },
   { id: 'distribution', name: 'Distribution vs a population', needs: 'one group-by (the bins) and a reference dataset' },
+  { id: 'flow', name: 'Flow (where each group went)', needs: 'two group-bys: where rows started and where they ended up' },
 ];
 
 export function Viz(props: { v: Visualization; res: Result; cat: Catalog }) {
@@ -671,6 +757,7 @@ function VizInner({ v, res, cat }: { v: Visualization; res: Result; cat: Catalog
     case 'profile': return <ProfileCard v={v} res={res} cat={cat} />;
     case 'ribbon': return <Ribbon v={v} res={res} cat={cat} />;
     case 'distribution': return <Distribution v={v} res={res} cat={cat} />;
+    case 'flow': return <Flow v={v} res={res} cat={cat} />;
   }
   return <Empty msg={`Unknown visualization ${v.type}`} />;
 }

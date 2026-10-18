@@ -221,7 +221,7 @@ export interface Query {
 
 export type VizType =
   | 'kpi' | 'gauge' | 'bar' | 'column' | 'line' | 'area' | 'hist' | 'scatter'
-  | 'heatmap' | 'table' | 'sparktable' | 'trend' | 'card' | 'profile' | 'ribbon' | 'distribution';
+  | 'heatmap' | 'table' | 'sparktable' | 'trend' | 'card' | 'profile' | 'ribbon' | 'distribution' | 'flow';
 
 /**
  * The population a distribution is drawn against. Its rows are binned by the query's group-by field
