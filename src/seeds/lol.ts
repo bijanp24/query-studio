@@ -12,7 +12,7 @@ const FILES = ['my_matchups', 'my_games', 'player_games', 'roster', 'lobby_relat
 export function lolWorkspace(): Workspace {
   const sources: Source[] = [
     { id: 'riot_project', name: 'Riot pipeline (project files)', kind: 'project', base: 'data/processed/latest/', description: 'The hourly processed layer the Riot API pull writes to the project folder. Live for project members.' },
-    { id: 'riot_snapshot', name: 'Published snapshot', kind: 'bundled', base: 'data/lol/', description: 'A copy of the processed layer published with the app (2026-10-14), with other players\' Riot IDs and PUUIDs replaced by short hashes. Used when the project files cannot be read.' },
+    { id: 'riot_snapshot', name: 'Published snapshot', kind: 'bundled', base: 'data/lol/', description: 'A copy of the processed layer published with the app (2026-10-18), with other players\' Riot IDs and PUUIDs replaced by short hashes. Used when the project files cannot be read.' },
     { id: 'highlights', name: 'My highlights and weights', kind: 'manual', description: 'Games you starred or weighted in the app. Joined onto My games by account and match.' },
   ];
   const items: SourceItem[] = [];

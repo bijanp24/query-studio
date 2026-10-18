@@ -131,7 +131,7 @@ export function App() {
 
   return <AppCtx.Provider value={app}>
     <header className="top">
-      <div className="brand"><span className="logo" aria-hidden>◩</span><span>Query Studio</span></div>
+      <div className="brand"><span className="logo" aria-hidden><svg viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="currentColor" /><rect x="5.5" y="12" width="3" height="6.5" rx="1" fill="#101319" /><rect x="10.5" y="8.5" width="3" height="10" rx="1" fill="#101319" /><rect x="15.5" y="5.5" width="3" height="13" rx="1" fill="#101319" /></svg></span><span>Query Studio</span></div>
       <Sel className="wssel" value={ws.id} onChange={v => v === '__new' ? setMenu('new') : v === '__import' ? setMenu('import') : openWs(v)} options={[...wsOptions, ['__new', '+ New workspace…'], ['__import', 'Import a workspace file…']]} />
       <span className="status small" title={ws.description}>{dataLine}{projectSrc && <button className="link" onClick={() => setLive(!live)}>{live ? 'use snapshot' : 'read live files'}</button>}</span>
       <span className="grow" />
