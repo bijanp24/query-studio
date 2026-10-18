@@ -7,7 +7,8 @@ for f in glob.glob('/mnt/project-files/data/raw/accounts/*.json'):
     a = json.load(open(f)); own_puuid.add(a.get('puuid')); own_names.add(f"{a.get('gameName')}#{a.get('tagLine')}")
 h = lambda s, n: hashlib.sha1(s.encode()).hexdigest()[:n]
 def rid(v):
-    if not v or v in own_names or v.endswith('#BOT') or v.startswith('BOT'): return v
+    # Every other name is hashed, including real players whose names start or end with BOT.
+    if not v or v in own_names: return v
     return 'player-' + h(v, 6)
 def pid(v):
     if not v or v in own_puuid or v == 'BOT': return v
