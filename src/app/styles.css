@@ -248,6 +248,8 @@ header.top .status, header.top .check, header.top .saved { color: var(--ink-text
 header.top button.link { color: var(--signal); }
 header.top button.ghost { background: transparent; color: var(--ink-text); border-color: var(--ink-border); }
 header.top button.ghost:hover:not(:disabled) { background: var(--ink-2); color: #fff; }
+header.top a.btnlink { color: var(--ink-text); border: 1px solid var(--ink-border); border-radius: 6px; padding: 5px 11px; text-decoration: none; white-space: nowrap; }
+header.top a.btnlink:hover { background: var(--ink-2); color: #fff; }
 nav.tabs.main { background: var(--ink); border-bottom: 0; top: 0; }
 nav.tabs.main button { color: var(--ink-text-2); padding: 10px 13px 9px; font-weight: 500; border-bottom-width: 3px; }
 nav.tabs.main button:hover { color: var(--ink-text); }

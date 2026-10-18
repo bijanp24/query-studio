@@ -90,8 +90,20 @@ export async function projectBytes(path: string): Promise<ArrayBuffer> {
 
 export async function saveFile(filename: string, data: string): Promise<'saved' | 'unavailable' | 'declined'> {
   const d = await cap('downloads');
-  if (!d) return 'unavailable';
+  if (!d) return browserDownload(filename, data);
   try { await d.save({ filename, data }); return 'saved'; } catch { return 'declined'; }
+}
+
+// Outside claude.ai (GitHub Pages, a local copy) a plain link download does the same job.
+function browserDownload(filename: string, data: string): 'saved' | 'unavailable' {
+  if (typeof document === 'undefined' || typeof URL === 'undefined' || !URL.createObjectURL) return 'unavailable';
+  try {
+    const url = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+    const a = Object.assign(document.createElement('a'), { href: url, download: filename });
+    document.body.appendChild(a); a.click(); a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return 'saved';
+  } catch { return 'unavailable'; }
 }
 
 export async function askJSON<T>(prompt: string, signal?: AbortSignal): Promise<T> {
