@@ -7,7 +7,26 @@ const LOBBY_ROLE: Compare = { kind: 'reference', dataset: 'lobby_players', filte
 const LOBBY_ROLE_CHAMP: Compare = { kind: 'reference', dataset: 'lobby_players', filters: [{ field: 'queue_name', op: '=', value: 'Ranked Solo' }], weightBy: ['position', 'champion'], label: 'lobby players, same role and champion' };
 const opp = (col: string, label = 'my lane opponents, same games'): Compare => ({ kind: 'paired', field: col, label });
 
-const FILES = ['my_matchups', 'my_games', 'player_games', 'roster', 'lobby_relative', 'champion_baselines', 'tier_baselines'];
+const FILES = ['my_matchups', 'my_games', 'player_games', 'roster', 'lobby_relative', 'champion_baselines', 'tier_baselines', 'met_rank_today'];
+// Published with the app only: the NA ladder, rank snapshots of everyone met, and the user's own accounts over time.
+const BUNDLED_ONLY = ['ladder', 'rank_tracking', 'my_rank'];
+
+// Ranks as an ordered scale: Iron IV = 0 … Diamond I = 27, Master 28, Grandmaster 29, Challenger 30.
+// Built from tier and division columns, so the live file and the snapshot need no extra columns.
+const TIER_NAMES: [string, string][] = [['IRON', 'Iron'], ['BRONZE', 'Bronze'], ['SILVER', 'Silver'], ['GOLD', 'Gold'], ['PLATINUM', 'Plat'], ['EMERALD', 'Emerald'], ['DIAMOND', 'Diamond']];
+const DIV_NAMES = ['IV', 'III', 'II', 'I'];
+const rankStep = (tier: string, div: string) =>
+  `if(decode(${tier}, 'MASTER', 1, 'GRANDMASTER', 1, 'CHALLENGER', 1, 0) = 1, decode(${tier}, 'MASTER', 28, 'GRANDMASTER', 29, 30), ` +
+  `decode(${tier}, ${TIER_NAMES.map(([t], i) => `'${t}', ${i * 4}`).join(', ')}, null) + decode(${div}, 'IV', 0, 'III', 1, 'II', 2, 'I', 3, 0))`;
+const LABEL_PAIRS = [...TIER_NAMES.flatMap(([, n], i) => DIV_NAMES.map((d, j) => `${i * 4 + j}, '${n} ${d}'`)), "28, 'Master'", "29, 'Grandmaster'", "30, 'Challenger'"];
+// decode takes at most 20 pairs, so the labels are split over two nested calls.
+const RANK_LABEL = `decode(rank_step, ${LABEL_PAIRS.slice(0, 16).join(', ')}, decode(rank_step, ${LABEL_PAIRS.slice(16).join(', ')}, null))`;
+const TIER_FULL = ['Iron', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Emerald', 'Diamond', 'Master', 'Grandmaster', 'Challenger'];
+const TIER_KEYS = ['IRON', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'EMERALD', 'DIAMOND', 'MASTER', 'GRANDMASTER', 'CHALLENGER'];
+// Tiers as an ordered scale with Unranked below Iron, so a flow can tell a climb from a fall.
+const tierStep = (tier: string) => `decode(${tier}, 'UNRANKED', -1, ${TIER_KEYS.map((t, i) => `'${t}', ${i}`).join(', ')}, null)`;
+const tierName = (step: string) => `decode(${step}, -1, 'Unranked', ${TIER_FULL.map((t, i) => `${i}, '${t}'`).join(', ')}, null)`;
+const rankColumns = (tier: string, div: string) => [{ name: 'rank_step', expr: rankStep(tier, div) }, { name: 'rank_label', expr: RANK_LABEL }];
 
 export function lolWorkspace(): Workspace {
   const sources: Source[] = [
@@ -20,6 +39,7 @@ export function lolWorkspace(): Workspace {
     items.push({ id: `p_${f}`, sourceId: 'riot_project', name: `${f}.csv`, format: 'csv', path: `${f}.csv` });
     items.push({ id: `b_${f}`, sourceId: 'riot_snapshot', name: `${f}.csv`, format: 'csv', path: `${f}.csv` });
   }
+  for (const f of BUNDLED_ONLY) items.push({ id: `b_${f}`, sourceId: 'riot_snapshot', name: `${f}.csv`, format: 'csv', path: `${f}.csv` });
   items.push({ id: 'game_highlights', sourceId: 'highlights', name: 'Game highlights', format: 'csv', keyColumns: ['account', 'match_id'], rows: [], schema: [{ name: 'account', type: 'string' }, { name: 'match_id', type: 'string' }, { name: 'highlight_weight', type: 'number' }, { name: 'tag', type: 'string' }, { name: 'note', type: 'string' }] });
 
   const both = (f: string, fallback = false) => [{ itemId: `p_${f}`, priority: 1 }, { itemId: `b_${f}`, priority: 2, ...(fallback ? { fallback: true } : {}) }];
@@ -61,6 +81,40 @@ export function lolWorkspace(): Workspace {
     { id: 'lobby_relative', name: 'Lobby-relative players', grain: 'player', feeds: both('lobby_relative', true), key: ['puuid'], description: 'Each player met (and your accounts): ranked-solo averages, their lead over their own lane opponents (rel_*), and what their opponents average (their_opp_*).' },
     { id: 'champion_baselines', name: 'Champion baselines', grain: 'role × champion', feeds: both('champion_baselines', true), key: ['position', 'champion'] },
     { id: 'tier_baselines', name: 'Tier baselines', grain: 'role × tier', feeds: both('tier_baselines', true), key: ['position', 'tier'] },
+    {
+      id: 'met_players', name: 'Players met: rank today', grain: 'player', feeds: both('met_rank_today', true), key: ['puuid'],
+      description: 'Everyone who shared a game with you, on any account, with their solo-queue rank today (the newest rank snapshot or cached rank; rank_source says which and when). side = whether they were only on your team, only against you, or both.',
+      derived: [...rankColumns('tier_today', 'division_today'), { name: 'ladder_pct', expr: 'if(top_pct_today >= 0, 100 - top_pct_today, null)' }],
+    },
+    {
+      id: 'ladder', name: 'NA solo-queue ladder', grain: 'ladder division', feeds: [{ itemId: 'b_ladder', priority: 1 }], key: ['tier', 'division'],
+      description: 'Every ranked NA solo-queue account counted per tier and division (Master capped at 10,000 in the source), with the ladder percentile range each division covers. The reference population for rank distributions.',
+      derived: [...rankColumns('tier', 'division'), { name: 'ladder_pct', expr: '(ladder_pct_low + ladder_pct_high) / 2' }],
+    },
+    {
+      id: 'rank_tracking', name: 'Players met: rank over time', grain: 'rank snapshot', sequence: 'snapshot_date', key: ['puuid', 'snapshot_date'], feeds: [{ itemId: 'b_rank_tracking', priority: 1 }],
+      description: 'One row per player met per rank snapshot: the first cached rank, then the daily snapshots. Change columns compare each snapshot with the same player\'s previous one.',
+      derived: [
+        ...rankColumns('tier', 'division'),
+        { name: 'prev_ladder_pct', expr: 'ladder_pct', window: { fn: 'lag', partitionBy: ['puuid'] } },
+        { name: 'prev_rank_step', expr: 'rank_step', window: { fn: 'lag', partitionBy: ['puuid'] } },
+        { name: 'ladder_change', expr: 'ladder_pct - prev_ladder_pct' },
+        { name: 'divisions_moved', expr: 'rank_step - prev_rank_step' },
+        { name: 'prev_tier', expr: 'tier', window: { fn: 'lag', partitionBy: ['puuid'] } },
+        { name: 'tier_step', expr: tierStep('tier') },
+        { name: 'prev_tier_step', expr: tierStep('prev_tier') },
+        { name: 'tier_name', expr: tierName('tier_step') },
+        { name: 'prev_tier_name', expr: tierName('prev_tier_step') },
+        { name: 'prev_rank_label', expr: 'rank_label', window: { fn: 'lag', partitionBy: ['puuid'] } },
+        { name: 'moved_up', expr: 'if(rank_step > prev_rank_step, 1, 0)' },
+        { name: 'moved_down', expr: 'if(rank_step < prev_rank_step, 1, 0)' },
+      ],
+    },
+    {
+      id: 'my_rank', name: 'My rank over time', grain: 'rank snapshot', sequence: 'snapshot_utc', feeds: [{ itemId: 'b_my_rank', priority: 1 }], key: ['account', 'snapshot_utc'],
+      description: 'Solo-queue rank of each of your accounts at every snapshot the pipeline took.',
+      derived: [{ name: 'account_name', expr: "split_part(account, '#', 1)" }, ...rankColumns('tier', 'division')],
+    },
   ];
 
   const F = (dataset: string, id: string, label: string, o: Partial<Field> = {}): Field => ({ id, dataset, label, role: 'measure', expr: id, type: 'number', agg: 'avg', format: 'number', polarity: 'higher', additivity: 'non_additive', ...o });
@@ -112,6 +166,30 @@ export function lolWorkspace(): Workspace {
     F('roster', 'ladder_pct', 'ladder percentile', { agg: 'median', format: 'decimal1', description: 'Where the player sits on the ladder today, 0 to 100 (50 = the median ranked player). Players with no rank have no value.' }),
     ...hiddenRank('roster', ['top_pct', 'ranked_games']),
     ...hiddenRank('lobby_relative', ['rank']),
+    // players met: rank today, against the ladder
+    D('met_players', 'rank_label', 'rank', { sortBy: 'rank_step' }), D('met_players', 'side', 'side (ally, enemy, both)'), D('met_players', 'seen_on', 'seen on account'),
+    D('met_players', 'riot_id', 'player'), D('met_players', 'rank_source', 'rank source'),
+    F('met_players', 'players', 'players', { expr: '1', agg: 'sum', format: 'integer', additivity: 'additive', polarity: 'neutral' }),
+    F('met_players', 'ladder_pct', 'ladder percentile', { agg: 'median', format: 'decimal1', polarity: 'neutral', description: 'Where the player sits on the NA ladder today, 0 to 100 (50 = the median ranked player). Unranked players have no value.' }),
+    F('met_players', 'rank_step', 'rank (divisions above Iron IV)', { agg: 'median', format: 'decimal1', polarity: 'neutral' }),
+    F('met_players', 'games_together', 'games together', { agg: 'sum', format: 'integer', additivity: 'additive', polarity: 'neutral' }),
+    D('ladder', 'rank_label', 'rank', { sortBy: 'rank_step' }), D('ladder', 'tier', 'tier'),
+    F('ladder', 'players', 'players', { expr: 'accounts', agg: 'sum', format: 'integer', additivity: 'additive', polarity: 'neutral', description: 'Ranked accounts in the division.' }),
+    // rank over time
+    D('rank_tracking', 'snapshot_date', 'snapshot date', { type: 'time' }), D('rank_tracking', 'rank_label', 'rank', { sortBy: 'rank_step' }),
+    D('rank_tracking', 'side', 'side (ally, enemy, both)'), D('rank_tracking', 'source', 'rank source'), D('rank_tracking', 'riot_id', 'player'),
+    F('rank_tracking', 'players', 'players', { expr: '1', agg: 'sum', format: 'integer', additivity: 'semi_additive', polarity: 'neutral', description: 'Players with a rank in the snapshot. Sums across players, not across snapshots.' }),
+    F('rank_tracking', 'ladder_pct', 'ladder percentile', { agg: 'median', format: 'decimal1', polarity: 'neutral' }),
+    F('rank_tracking', 'ladder_change', 'change in ladder percentile since the previous snapshot', { agg: 'median', format: 'decimal1', polarity: 'neutral' }),
+    F('rank_tracking', 'divisions_moved', 'divisions moved since the previous snapshot', { agg: 'avg', format: 'decimal2', polarity: 'neutral' }),
+    F('rank_tracking', 'moved_up', 'moved up a division or more', { agg: 'rate', format: 'percent', polarity: 'neutral' }),
+    F('rank_tracking', 'moved_down', 'moved down a division or more', { agg: 'rate', format: 'percent', polarity: 'neutral' }),
+    D('rank_tracking', 'prev_tier', 'tier at the previous snapshot', { hidden: true }),
+    D('rank_tracking', 'tier_name', 'tier', { sortBy: 'tier_step' }), D('rank_tracking', 'prev_tier_name', 'tier at the previous snapshot', { sortBy: 'prev_tier_step' }),
+    D('rank_tracking', 'prev_rank_label', 'rank at the previous snapshot', { sortBy: 'prev_rank_step' }),
+    D('my_rank', 'account_name', 'account'), D('my_rank', 'snapshot_utc', 'snapshot time (UTC)', { type: 'time' }), D('my_rank', 'rank_label', 'rank', { sortBy: 'rank_step' }),
+    F('my_rank', 'ladder_pct', 'my ladder percentile', { agg: 'median', format: 'decimal1', polarity: 'higher' }),
+    F('my_rank', 'lp', 'LP', { agg: 'median', format: 'integer', polarity: 'higher' }),
   ];
 
   const Q = (o: Partial<Query> & Pick<Query, 'id' | 'name'>): Query => ({ dataset: 'games', measures: [], groupBy: [], filters: [], last: 50, compare: { kind: 'none' }, followDashboard: true, ...o });
@@ -154,6 +232,19 @@ export function lolWorkspace(): Workspace {
     Q({ id: 'q_lobby_by_acct', name: 'Lobby level by account', last: 0, filters: RS, measures: [{ field: 'lobby_level', label: 'lobby level, median' }, { field: 'lobby_level', agg: 'p25', label: 'lower quartile' }, { field: 'lobby_level', agg: 'p75', label: 'upper quartile' }, { agg: 'count' }], groupBy: [{ field: 'account_name' }], minRows: 5 }),
     Q({ id: 'q_met_pct', name: 'Everyone I have played with or against: ladder percentile today', dataset: 'roster', last: 0, measures: m('ladder_pct') }),
     Q({ id: 'q_curve_w2', name: 'Win rate with the learning-curve weighting', last: 0, filters: RS, measures: m('win'), weight: 'w_learning_curve' }),
+    // Rank distribution of the players met, against the ladder
+    Q({ id: 'q_met_dist', name: 'Everyone I have played with or against, by rank today', dataset: 'met_players', last: 0, measures: m('players'), groupBy: [{ field: 'rank_label' }], filters: [{ field: 'rank_label', op: 'not_null', value: '' }] }),
+    Q({ id: 'q_met_dist_enemy', name: 'My opponents, by rank today', dataset: 'met_players', last: 0, measures: m('players'), groupBy: [{ field: 'rank_label' }], filters: [{ field: 'rank_label', op: 'not_null', value: '' }, { field: 'side', op: 'in', value: 'enemy, both' }] }),
+    Q({ id: 'q_met_dist_ally', name: 'My teammates, by rank today', dataset: 'met_players', last: 0, measures: m('players'), groupBy: [{ field: 'rank_label' }], filters: [{ field: 'rank_label', op: 'not_null', value: '' }, { field: 'side', op: 'in', value: 'ally, both' }] }),
+    Q({ id: 'q_met_ladder_pct', name: 'Players met: ladder percentile today', dataset: 'met_players', last: 0, measures: m('ladder_pct') }),
+    Q({ id: 'q_met_side', name: 'Players met by side: ladder percentile today', dataset: 'met_players', last: 0, measures: [{ field: 'ladder_pct', agg: 'p25', label: 'lower quartile' }, { field: 'ladder_pct', label: 'median' }, { field: 'ladder_pct', agg: 'p75', label: 'upper quartile' }, { field: 'players' }], groupBy: [{ field: 'side' }], sort: 'key_asc' }),
+    // Rank tracking
+    Q({ id: 'q_track_by_date', name: 'Players met: ladder percentile by snapshot date', dataset: 'rank_tracking', last: 0, measures: [{ field: 'ladder_pct', agg: 'p25', label: 'lower quartile' }, { field: 'ladder_pct', label: 'median' }, { field: 'ladder_pct', agg: 'p75', label: 'upper quartile' }, { field: 'players' }], groupBy: [{ field: 'snapshot_date', grain: 'day' }] }),
+    Q({ id: 'q_track_change', name: 'Players met: change in ladder percentile since the previous snapshot', dataset: 'rank_tracking', last: 0, measures: m('ladder_change'), filters: [{ field: 'ladder_change', op: 'not_null', value: '' }] }),
+    Q({ id: 'q_track_moved', name: 'Players met: who climbed and who fell, by tier at the previous snapshot', dataset: 'rank_tracking', last: 0, measures: [{ field: 'moved_up' }, { field: 'moved_down' }, { field: 'divisions_moved' }], filters: [{ field: 'prev_rank_step', op: 'not_null', value: '' }, { field: 'rank_step', op: 'not_null', value: '' }], groupBy: [{ field: 'prev_tier' }], minRows: 10, rollup: true }),
+    Q({ id: 'q_flow_tier', name: 'Rank flow: tier at the previous snapshot → tier now', dataset: 'rank_tracking', last: 0, measures: m('players'), groupBy: [{ field: 'prev_tier_name' }, { field: 'tier_name' }], filters: [{ field: 'prev_tier_name', op: 'not_null', value: '' }, { field: 'tier_name', op: 'not_null', value: '' }] }),
+    Q({ id: 'q_flow_div', name: 'Rank flow by division: previous snapshot → now', dataset: 'rank_tracking', last: 0, measures: m('players'), groupBy: [{ field: 'prev_rank_label' }, { field: 'rank_label' }], filters: [{ field: 'prev_rank_label', op: 'not_null', value: '' }, { field: 'rank_label', op: 'not_null', value: '' }] }),
+    Q({ id: 'q_my_rank', name: 'My main account: ladder percentile over time', dataset: 'my_rank', last: 0, measures: m('ladder_pct'), filters: [{ field: 'account_name', op: '=', value: 'takinturrets' }] }),
   ];
   const vizs: Visualization[] = [
     V({ id: 'v_card', name: 'You vs who you actually play', queryId: 'q_lens', type: 'card', width: 6, note: 'Every column is a measured group of real players. No rank, no distribution.',
@@ -197,6 +288,18 @@ export function lolWorkspace(): Workspace {
     V({ id: 'v_cs_ribbon', name: 'CS per min: rolling baseline and spread', queryId: 'q_cs_ribbon', type: 'ribbon', color: 1, width: 3, window: 20 }),
     V({ id: 'v_lobby_acct', name: 'Lobby level by account', queryId: 'q_lobby_by_acct', type: 'table', width: 3 }),
     V({ id: 'v_met_hist', name: 'Players met: ladder percentile today', queryId: 'q_met_pct', type: 'hist', color: 5, width: 3, note: 'Everyone who shared a game with you, all accounts. 50 = the median ranked player.' }),
+    V({ id: 'v_met_dist', name: 'Who I actually play: rank today vs the NA ladder', queryId: 'q_met_dist', type: 'distribution', color: 5, width: 6, dist: { dataset: 'ladder', label: 'the NA ladder' }, note: 'Bars: everyone who shared a game with you, all accounts lumped, by rank today. Outline: every ranked NA solo-queue account. Unranked players are left out.' }),
+    V({ id: 'v_met_dist_enemy', name: 'Opponents vs the ladder', queryId: 'q_met_dist_enemy', type: 'distribution', color: 8, width: 3, dist: { dataset: 'ladder', label: 'the NA ladder' } }),
+    V({ id: 'v_met_dist_ally', name: 'Teammates vs the ladder', queryId: 'q_met_dist_ally', type: 'distribution', color: 2, width: 3, dist: { dataset: 'ladder', label: 'the NA ladder' } }),
+    V({ id: 'v_met_pct_hist', name: 'Players met: ladder percentile, median and middle half', queryId: 'q_met_ladder_pct', type: 'hist', color: 5, width: 3, note: 'Against the ladder itself this would be flat: every percentile holds 1% of ranked players.' }),
+    V({ id: 'v_met_side', name: 'Opponents vs teammates: ladder percentile', queryId: 'q_met_side', type: 'table', width: 3, note: '"both" = met on your team in one game and against you in another.' }),
+    V({ id: 'v_track_by_date', name: 'Players met: ladder percentile at each snapshot', queryId: 'q_track_by_date', type: 'table', width: 3, note: 'Rows before the first daily snapshot are the cached ranks the met-rank table used, a different subset of players each day. From the daily snapshots on, every row covers everyone met.' }),
+    V({ id: 'v_track_change', name: 'How far players met moved since the previous snapshot', queryId: 'q_track_change', type: 'hist', color: 4, width: 3, note: 'Ladder percentile points, per player. Becomes the "rate of change" as snapshots accumulate.' }),
+    V({ id: 'v_track_moved', name: 'Players met: who climbed and who fell', queryId: 'q_track_moved', type: 'table', width: 3, note: 'Between each player\'s previous rank snapshot and the latest one, by the tier they were in before.' }),
+    V({ id: 'v_flow_tier', name: 'Rank flow: where the players I met went', queryId: 'q_flow_tier', type: 'flow', color: 1, width: 6, note: 'Left: each player\'s tier at their previous snapshot. Right: their tier now. Green bands climbed, red fell, grey stayed. Use the dashboard filter on side to see opponents or teammates only.' }),
+    V({ id: 'v_flow_div', name: 'Rank flow by division', queryId: 'q_flow_div', type: 'flow', color: 1, width: 6, note: 'Each row is a division at the previous snapshot; the cells show where its players are now, as a share of the row.' }),
+    V({ id: 'v_my_rank_profile', name: 'My rank: baseline, consistency, peak, trend', queryId: 'q_my_rank', type: 'profile', color: 3, width: 3, window: 3, per: 10, note: 'Over the rank snapshots of the main account. Peak = the best 3 snapshots in a row; trend = change per 10 snapshots.' }),
+    V({ id: 'v_my_rank_ribbon', name: 'My rank: rolling baseline and spread', queryId: 'q_my_rank', type: 'ribbon', color: 3, width: 3, window: 3 }),
   ];
   const T = (ids: string[]): Dashboard['tiles'] => ids.map((vizId, i) => ({ id: `t_${vizId}_${i}`, vizId }));
   const dashboards: Dashboard[] = [
@@ -205,6 +308,8 @@ export function lolWorkspace(): Workspace {
     { id: 'd_showcase', name: 'Showcase & weights', filters: [], tiles: T(['v_curve', 'v_curve_w2', 'v_cs_plain', 'v_cs_len', 'v_showcase', 'v_gp_show', 'v_monthly']) },
     { id: 'd_profile', name: 'Player profile', filters: [], tiles: T(['v_profile', 'v_lobby_ribbon', 'v_cs_ribbon', 'v_met_hist', 'v_lobby_acct']) },
     { id: 'd_matchups', name: 'Champions & matchups', filters: [], tiles: T(['v_champ_wr', 'v_gp', 'v_kda_champ', 'v_heat']) },
+    { id: 'd_met_rank', name: 'Who I play: rank distribution', description: 'The rank of everyone you have played with or against, against the whole ladder.', filters: [], tiles: T(['v_met_dist', 'v_met_dist_enemy', 'v_met_dist_ally', 'v_met_pct_hist', 'v_met_side']) },
+    { id: 'd_tracking', name: 'Rank tracking', description: 'Rank snapshots over time: the players you met, and your own accounts.', filters: [], tiles: T(['v_flow_tier', 'v_flow_div', 'v_track_by_date', 'v_track_change', 'v_track_moved', 'v_my_rank_profile', 'v_my_rank_ribbon']) },
   ];
   return {
     id: 'lol', name: 'League of Legends', description: 'Your games, the players in your lobbies, and the players in theirs, from the Riot API pipeline.',
@@ -214,9 +319,15 @@ export function lolWorkspace(): Workspace {
       'opp_* columns on games are the lane opponent in the same game (opp_cs_per_min, opp_solo_kills, opp_kp, opp_vision_pm, opp_dmg_pm, opp_gold_pm, opp_obj_takedowns, opp_obj_damage, opp_lane_gold_adv, opp_cs_at_10). opp_rel_* = that opponent\'s average lead over their own lane opponents (second-degree baseline; opp_rel_cspm for CS per min). rel_* = the user\'s lead over the lane opponent.',
       'Default comparison for "vs my lobbies / lobby players" is reference dataset lobby_players filtered queue_name = Ranked Solo, weightBy position. "vs my lane opponents" is paired with the opp_ column. Rank and tier fields are hidden; do not build on them unless asked.',
       'Player profile: lobby_level = where the other nine players sit on the ladder (0-100 percentile, rank as of the pull). Baseline, consistency, peak and trend of any measure = viz type profile (one card per measure, no groupBy, last 0); a rolling baseline with its spread = viz type ribbon. Use agg median for per-game stats when the user asks for baseline or consistency; p25, p75 and iqr are available. roster.ladder_pct = each player met, ladder percentile today.',
+      'Rank distribution: met_players = one row per player met with their rank today (rank_label in ladder order via rank_step, ladder_pct 0-100, side = ally / enemy / both). ladder = the NA solo-queue ladder, one row per division with players = accounts. "Rank of the players I play", "vs the ladder" → query met_players, measures [players], groupBy rank_label, filter rank_label not_null, last 0, visualization distribution with reference ladder. rank_tracking = one row per player met per rank snapshot (ladder_change, divisions_moved, moved_up compare with that player\'s previous snapshot). Rank flow = viz type flow on rank_tracking grouped by [prev_tier_name, tier_name] (or [prev_rank_label, rank_label] for divisions), measure players. my_rank = the user\'s own accounts over time (ladder_pct); baseline, consistency, peak and trend of the user\'s rank = profile on my_rank filtered to one account_name.',
       'game_weight = the user\'s highlight weight per game (1 when unset); highlighted = 1 for games weighted above 1. "Showcase", "highlight", "my best games" → weight game_weight or filter highlighted = 1. Weighting schemes are fields with role weight (w_learning_curve, w_main_role, w_support_half, w_duration, w_highlights); set query.weight to a weight field id or to an expression such as if(position = \'UTILITY\', 0.5, 1) or if(champion = \'Riven\' and champ_game_no > 150, 2, 1). champ_game_no = the Nth game on that champion in this history; champ_experience buckets it; hard_champion = 1 for mechanically hard champions. Time-weighted CS/min = field cs_per_min_tw (ratio of total CS to total minutes). enemy_jg_ganks_pre15 exists only for the user\'s own games.',
     ].join('\n'),
     suggestions: [
+      { text: 'What rank are the players I actually play with and against?', vizId: 'v_met_dist' },
+      { text: 'Are my opponents ranked higher than my teammates?', vizId: 'v_met_side' },
+      { text: 'Where did the players I met move between snapshots?', vizId: 'v_flow_tier' },
+      { text: 'How have the players I met moved since the last snapshot?', vizId: 'v_track_change' },
+      { text: 'My rank: baseline, consistency, peak and trend', vizId: 'v_my_rank_profile' },
       { text: 'My baseline, consistency, peak and trend', vizId: 'v_profile' },
       { text: 'Is my lobby level rising or falling?', vizId: 'v_lobby_ribbon' },
       { text: 'Rank of everyone I have played with or against', vizId: 'v_met_hist' },
@@ -225,6 +336,6 @@ export function lolWorkspace(): Workspace {
       { text: 'My peak 20-game stretch for solo kills, and when it was' },
       { text: 'Are my solo kills rising while my lobby level stays flat?' },
     ],
-    sources, items, datasets, fields, queries, visualizations: vizs, dashboards, activeDashboard: 'd_lens', seedVersion: 2,
+    sources, items, datasets, fields, queries, visualizations: vizs, dashboards, activeDashboard: 'd_lens', seedVersion: 3,
   };
 }

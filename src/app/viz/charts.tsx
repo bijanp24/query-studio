@@ -3,10 +3,12 @@
 // visualization; a shape that does not fit says so instead of guessing.
 import React from 'react';
 import type { Row, Value, Visualization } from '../../core/types';
-import { fmt, measureFn, pointsOf, reference, seriesOf, WEEKDAY_ORDER, type Catalog, type Group, type Result } from '../../core/engine';
+import { fmt, matchFilters, measureFn, pointsOf, reference, seriesOf, WEEKDAY_ORDER, type Catalog, type Group, type Result } from '../../core/engine';
 import { fieldExpr, fieldsFor, missingColumns, resolveMeasure, type ResolvedMeasure } from '../../core/semantic';
-import { ols, welch, mean } from '../../core/stats';
-import { toNum } from '../../core/expr';
+import { ols, welch, mean, quantile } from '../../core/stats';
+import { compile, evaluate, toNum } from '../../core/expr';
+import { distribution, ordinal, type BinCount, type DistSummary } from '../../core/distribution';
+import { flowOf, type FlowSummary } from '../../core/flow';
 import { profileOf, type Profile } from '../../core/profile';
 
 export const PALETTE = 8;
@@ -267,15 +269,103 @@ function Hist({ v, res }: { v: Visualization; res: Result }) {
   vals.forEach(x => { bins[Math.min(nb - 1, Math.floor((x - lo) / step))].n++; });
   const W = useW(), H = 180, pl = 30, pb = 26, pt = 8, maxN = Math.max(...bins.map(b => b.n));
   const bw = (W - pl - 10) / nb, X = (val: number) => pl + (val - lo) / (hi - lo || 1) * (W - pl - 10), Y = (n: number) => pt + (1 - n / maxN) * (H - pt - pb);
-  const mu = mean(vals)!, ref = res.compare?.value;
+  const ref = res.compare?.value;
+  // The four numbers a distribution is read by: where the middle is, how wide the middle half is, where it peaks, and the average.
+  const med = quantile(vals, 0.5)!, q1 = quantile(vals, 0.25)!, q3 = quantile(vals, 0.75)!, mu = mean(vals)!;
+  const top = bins.reduce((a, b) => b.n > a.n ? b : a);
   return <>
-    <svg viewBox={`0 0 ${W} ${H}`} role="img">
+    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${m?.label}: median ${F(med, m)}, middle half ${F(q1, m)} to ${F(q3, m)}`}>
+      <rect x={X(q1)} y={pt} width={Math.max(1, X(q3) - X(q1))} height={H - pb - pt} fill="var(--surface-2)" />
       {bins.map((b, i) => <rect key={i} x={pl + i * bw + 1} y={Y(b.n)} width={bw - 2} height={H - pb - Y(b.n)} rx={3} fill={color(v.color)}><title>{`${F(b.lo, m)} to ${F(b.hi, m)}: ${b.n} ${res.grain}s`}</title></rect>)}
       {niceTicks(lo, hi, 5).filter(t => t >= lo && t <= hi).map(tv => <text key={tv} x={X(tv)} y={H - 8} textAnchor="middle" className="ax">{F(tv, m)}</text>)}
-      <line x1={X(mu)} x2={X(mu)} y1={pt} y2={H - pb} className="solid" /><text x={X(mu) + 4} y={pt + 10} className="lab">mean {F(mu, m)}</text>
+      <line x1={X(med)} x2={X(med)} y1={pt} y2={H - pb} className="solid" /><text x={X(med) + 4} y={pt + 10} className="lab">median {F(med, m)}</text>
       {ref != null && ref >= lo && ref <= hi && <line x1={X(ref)} x2={X(ref)} y1={pt} y2={H - pb} className="ref" />}
     </svg>
-    {ref != null && <Legend items={[['dash', `${res.compare!.label}: ${F(ref, m)}`]]} />}
+    <Legend items={[['var(--surface-2)', 'shaded: middle half'], ...(ref != null ? [['dash', `${res.compare!.label}: ${F(ref, m)}`] as [string, string]] : [])]} />
+    <div className="trendstats">
+      <div><div className="k">median</div><div className="v">{F(med, m)}</div></div>
+      <div><div className="k">middle half</div><div className="v">{F(q1, m)} to {F(q3, m)}</div></div>
+      <div><div className="k">most common</div><div className="v">{F(top.lo, m)} to {F(top.hi, m)}</div></div>
+      <div><div className="k">mean</div><div className="v">{F(mu, m)}</div></div>
+    </div>
+  </>;
+}
+
+// ---------- distribution against a reference population ----------
+/** Bins of the query (its first group-by) and of the reference dataset counted into the same bins. */
+export function distOf(v: Visualization, res: Result, cat: Catalog): { d: DistSummary | null; label: string; msg?: string } {
+  const q = res.query, g0 = q.groupBy[0], m = res.measures[0];
+  if (!g0 || !res.groups || q.groupBy.length !== 1) return { d: null, label: '', msg: 'A distribution needs a query grouped by one field: the bins.' };
+  const fields = fieldsFor(cat.ws, res.datasetId, cat.tables[res.datasetId]);
+  const sortOf = (fs: typeof fields) => fs.find(f => f.id === g0.field)?.sortBy;
+  const orderFn = (src: string | undefined) => { if (!src) return null; try { const n = compile(src); return (r: Row) => toNum(evaluate(n, r)); } catch { return null; } };
+  const so = orderFn(sortOf(fields));
+  const sample: BinCount[] = res.groups.filter(g => g.keys[0] != null && g.values[0] != null).map((g, i) => ({ key: keyText(g.keys[0]), order: so && g.rows[0] ? so(g.rows[0]) ?? NaN : i, n: g.values[0] as number }));
+  const refId = v.dist?.dataset || (q.compare.kind === 'reference' ? q.compare.dataset : undefined);
+  const rt = refId ? cat.tables[refId] : undefined;
+  const label = v.dist?.label || (refId ? cat.ws.datasets.find(d => d.id === refId)?.name || refId : '');
+  const refBins: BinCount[] = [];
+  let msg: string | undefined;
+  if (refId && !rt) msg = `The reference dataset ${refId} has not loaded.`;
+  if (rt) {
+    const rfields = fieldsFor(cat.ws, refId!, rt);
+    const keyE = fieldExpr(g0.field, rfields);
+    const rf = rfields.find(f => f.id === m?.fieldId && f.role === 'measure');
+    const wE = v.dist?.weight || (rf && (rf.agg === 'sum' || rf.agg === 'count') ? rf.expr : '1');
+    const miss = [...missingColumns(keyE, rt), ...missingColumns(wE, rt)];
+    if (miss.length) msg = `The reference dataset has no ${miss.join(', ')}.`;
+    else {
+      const kn = compile(keyE), wn = compile(wE), ro = orderFn(sortOf(rfields) && !missingColumns(sortOf(rfields)!, rt).length ? sortOf(rfields) : undefined);
+      const exprOf = (name: string) => compile(fieldExpr(name, rfields));
+      const acc = new Map<string, BinCount>();
+      for (const r of rt.rows) {
+        if (v.dist?.filters?.length && !matchFilters(r, v.dist.filters, exprOf)) continue;
+        const k = evaluate(kn, r), w = toNum(evaluate(wn, r));
+        if (k == null || w == null) continue;
+        const key = String(k);
+        let b = acc.get(key); if (!b) acc.set(key, b = { key, order: ro ? ro(r) ?? NaN : sample.find(s => s.key === key)?.order ?? NaN, n: 0 });
+        b.n += w;
+      }
+      refBins.push(...acc.values());
+    }
+  }
+  return { d: distribution(sample, refBins), label, msg };
+}
+
+function Distribution({ v, res, cat }: { v: Visualization; res: Result; cat: Catalog }) {
+  const { d, label, msg } = distOf(v, res, cat);
+  if (!d) return <Empty msg={msg || 'No rows match this query.'} />;
+  const hasRef = d.refTotal > 0;
+  const W = useW(), H = 230, pl = 40, pr = 8, pt = 12, pb = 56;
+  const bins = d.bins, bw = (W - pl - pr) / bins.length;
+  const hi = (Math.max(...bins.map(b => Math.max(b.share, b.refShare))) || 1) * 1.08;
+  const Y = (x: number) => pt + (1 - x / hi) * (H - pt - pb);
+  const X = (i: number) => pl + i * bw;
+  const idx = (k: string) => bins.findIndex(b => b.key === k);
+  const i1 = idx(d.p25.bin.key), i3 = idx(d.p75.bin.key), im = idx(d.median.bin.key);
+  const pct = (x: number) => (x * 100).toFixed(1) + '%';
+  const at = (x: number | null) => x == null ? '' : `${ordinal(x)} percentile`;
+  const g = res.grain;
+  const rot = bins.length > 8;
+  return <>
+    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${res.n} ${g}s by ${res.query.groupBy[0].field}${hasRef ? ` against ${label}` : ''}; median ${d.median.bin.key}`}>
+      <rect x={X(i1)} y={pt} width={(i3 - i1 + 1) * bw} height={H - pt - pb} fill="var(--surface-2)" />
+      {niceTicks(0, hi, 4).filter(t => t <= hi).map(tv => <g key={tv}><line x1={pl} x2={W - pr} y1={Y(tv)} y2={Y(tv)} className="grid" /><text x={pl - 4} y={Y(tv) + 4} textAnchor="end" className="ax">{Math.round(tv * 100)}%</text></g>)}
+      {bins.map((b, i) => <g key={b.key}>
+        <rect x={X(i) + 2} y={Y(b.share)} width={Math.max(1, bw - 4)} height={H - pb - Y(b.share)} rx={2} fill={color(v.color)}><title>{`${b.key}: ${b.n.toLocaleString()} ${g}s, ${pct(b.share)}${hasRef ? `; ${label} ${pct(b.refShare)}, its ${b.refLo.toFixed(0)}th to ${b.refHi.toFixed(0)}th percentile` : ''}`}</title></rect>
+        {hasRef && <path d={`M${X(i) + 1},${H - pb} V${Y(b.refShare)} H${X(i + 1) - 1} V${H - pb}`} fill="none" stroke="var(--text)" strokeWidth={1.5} />}
+        <text x={X(i) + bw / 2} y={H - pb + 12} textAnchor={rot ? 'end' : 'middle'} transform={rot ? `rotate(-45 ${X(i) + bw / 2} ${H - pb + 12})` : undefined} className={'lab' + (i === im ? ' strong' : '')}>{b.key.slice(0, 12)}</text>
+      </g>)}
+      <line x1={X(im) + bw / 2} x2={X(im) + bw / 2} y1={pt} y2={H - pb} className="solid" />
+    </svg>
+    <Legend items={[[color(v.color), `${d.total.toLocaleString()} ${g}s, share per bin`], ...(hasRef ? [['var(--text)', `outline: ${label}`] as [string, string]] : []), ['var(--surface-2)', 'shaded: middle half'], ['var(--text)', `line: median`]]} />
+    <div className="trendstats">
+      <div><div className="k">Baseline (median)</div><div className="v">{d.median.bin.key}</div><div className="small muted">{hasRef ? at(d.median.refPct) + ' of ' + label : ''}</div></div>
+      <div><div className="k">Consistency (middle half)</div><div className="v">{d.p25.bin.key === d.p75.bin.key ? d.p25.bin.key : `${d.p25.bin.key} to ${d.p75.bin.key}`}</div><div className="small muted">{hasRef && d.p25.refPct != null ? `${ordinal(d.p25.refPct)} to ${at(d.p75.refPct)}` : ''}</div></div>
+      <div><div className="k">Peak (most common)</div><div className="v">{d.mode.key}</div><div className="small muted">{pct(d.mode.share)} of {g}s{hasRef ? `, ${pct(d.mode.refShare)} of ${label}` : ''}</div></div>
+      {hasRef && <div><div className="k">Against {label}</div><div className="v">{d.shift == null ? '—' : `${d.shift >= 0 ? '+' : ''}${d.shift.toFixed(0)} pts`}</div><div className="small muted">{d.superiority == null ? '' : `ranks higher ${(d.superiority * 100).toFixed(0)}% of the time`}</div></div>}
+    </div>
+    {(W >= 700 || !hasRef || msg) && <div className="small muted">{!hasRef ? 'Pick a reference dataset to compare this distribution with a population.' : W >= 700 ? `Shift: the median's percentile in ${label} minus 50. "Ranks higher" is the chance that a random ${g} here sits in a higher bin than a random member of ${label}, ties counted half; 50% would be no difference. Percentiles inside a bin are interpolated.` : ''}{msg ? ' ' + msg : ''}</div>}
   </>;
 }
 
@@ -434,11 +524,95 @@ function Trend({ v, res, cat }: { v: Visualization; res: Result; cat: Catalog })
   </>;
 }
 
+
+// ---------- flow: where each "from" category went ----------
+export function flowFor(res: Result, cat: Catalog): { f: FlowSummary | null; msg?: string } {
+  const q = res.query;
+  if (q.groupBy.length !== 2 || !res.groups) return { f: null, msg: 'A flow needs a query grouped by two fields: where rows started and where they ended up.' };
+  const fields = fieldsFor(cat.ws, res.datasetId, cat.tables[res.datasetId]);
+  // Each side orders its categories by its own sortBy; a category seen on both sides keeps the first order found.
+  const order = new Map<string, number>();
+  q.groupBy.forEach((gb, side) => {
+    const src = fields.find(x => x.id === gb.field)?.sortBy; if (!src) return;
+    let n; try { n = compile(src); } catch { return; }
+    for (const g of res.groups!) { const k = g.keys[side]; if (k == null || order.has(String(k)) || !g.rows[0]) continue; const v = toNum(evaluate(n, g.rows[0])); if (v != null) order.set(String(k), v); }
+  });
+  const cells = res.groups.filter(g => g.keys[0] != null && g.keys[1] != null && g.values[0] != null).map(g => ({ from: String(g.keys[0]), to: String(g.keys[1]), n: g.values[0] as number }));
+  return { f: flowOf(cells, k => order.get(k) ?? null) };
+}
+
+function Flow({ v, res, cat }: { v: Visualization; res: Result; cat: Catalog }) {
+  const { f, msg } = flowFor(res, cat);
+  if (!f) return <Empty msg={msg} />;
+  const W = useW(), g = res.measures[0]?.agg === 'count' ? `${res.grain}s` : res.measures[0]?.label || `${res.grain}s`, pct = (x: number) => (x / f.total * 100).toFixed(1) + '%';
+  const dirColor = { up: 'var(--ok)', down: 'var(--bad)', same: 'var(--text-3)', changed: color(v.color) };
+  const fields = fieldsFor(cat.ws, res.datasetId, cat.tables[res.datasetId]);
+  const sideLabel = (i: number) => fields.find(x => x.id === res.query.groupBy[i].field)?.label || res.query.groupBy[i].field;
+  const readout = <div className="trendstats">
+    {f.ordered ? <>
+      <div><div className="k">stayed</div><div className="v">{pct(f.stayed)}</div><div className="small muted">{f.stayed.toLocaleString()} {g}</div></div>
+      <div><div className="k">moved up</div><div className="v pos">{pct(f.up)}</div><div className="small muted">{f.up.toLocaleString()} {g}</div></div>
+      <div><div className="k">moved down</div><div className="v neg">{pct(f.down)}</div><div className="small muted">{f.down.toLocaleString()} {g}</div></div>
+    </> : <>
+      <div><div className="k">stayed</div><div className="v">{pct(f.stayed)}</div></div>
+      <div><div className="k">changed</div><div className="v">{pct(f.changed)}</div></div>
+      <div />
+    </>}
+    <div><div className="k">net change</div><div className="v">{f.gainer ? `${f.gainer.key} +${(f.gainer.in - f.gainer.out).toLocaleString()}` : '—'}</div><div className="small muted">{f.loser ? `${f.loser.key} ${(f.loser.in - f.loser.out).toLocaleString()}` : ''}</div></div>
+  </div>;
+  // Many categories: a matrix of row shares (where each starting category went) reads better than bands.
+  if (f.nodes.length > 12) {
+    const from = f.nodes.filter(x => x.out > 0), to = f.nodes.filter(x => x.in > 0);
+    const cw = Math.max(12, Math.min(28, Math.floor((W - 96) / to.length))), ch = Math.max(12, Math.min(20, cw)), pl = 90, pt = 60;
+    const Wm = pl + cw * to.length + 6, Hm = pt + ch * from.length + 4;
+    const cell = new Map(f.cells.map(c => [c.from + '\u0001' + c.to, c]));
+    return <>
+      <div className="tscroll"><svg viewBox={`0 0 ${Wm} ${Hm}`} role="img" style={{ maxWidth: Wm }} aria-label={`Flow from ${sideLabel(0)} to ${sideLabel(1)}`}>
+        {to.map((t, j) => <text key={t.key} x={pl + j * cw + cw / 2} y={pt - 6} transform={`rotate(-55 ${pl + j * cw + cw / 2} ${pt - 6})`} className="ax">{t.key.slice(0, 11)}</text>)}
+        {from.map((s, i) => <g key={s.key}>
+          <text x={pl - 6} y={pt + i * ch + ch / 2 + 4} textAnchor="end" className="lab">{s.key.slice(0, 12)}</text>
+          {to.map((t, j) => { const c = cell.get(s.key + '\u0001' + t.key); if (!c) return null; const share = c.n / s.out; return <rect key={t.key} x={pl + j * cw + 1} y={pt + i * ch + 1} width={cw - 2} height={ch - 2} rx={2} fill={dirColor[c.dir]} opacity={0.15 + 0.85 * Math.sqrt(share)}><title>{`${s.key} → ${t.key}: ${c.n.toLocaleString()} ${g}, ${(share * 100).toFixed(1)}% of ${s.key}`}</title></rect>; })}
+        </g>)}
+      </svg></div>
+      <Legend items={[['var(--ok)', 'moved up'], ['var(--text-3)', 'stayed'], ['var(--bad)', 'moved down'], ['var(--surface-2)', `rows: ${sideLabel(0)}; columns: ${sideLabel(1)}; darker = larger share of the row`]]} />
+      {readout}
+    </>;
+  }
+  // Few categories: bands from each starting category (left) to where it ended up (right), highest first.
+  const nodes = [...f.nodes].reverse();
+  const H = Math.max(220, nodes.length * 34), pt = 8, pb = 8, gap = 6, nw = 12, lw = Math.min(110, W * 0.22);
+  const x0 = lw, x1 = W - lw;
+  const scale = (H - pt - pb - gap * (nodes.length - 1)) / f.total;
+  const place = (side: 'out' | 'in') => { let y = pt; const m = new Map<string, number>(); for (const n of nodes) { m.set(n.key, y); y += n[side] * scale + (n[side] ? gap : 0); } return m; };
+  const yl = place('out'), yr = place('in');
+  const rank = new Map(nodes.map((n, i) => [n.key, i]));
+  const offL = new Map<string, number>(), offR = new Map<string, number>();
+  const bands = [...f.cells].sort((a, b) => rank.get(a.from)! - rank.get(b.from)! || rank.get(a.to)! - rank.get(b.to)!).map(c => {
+    const h = c.n * scale;
+    const ya = yl.get(c.from)! + (offL.get(c.from) || 0); offL.set(c.from, (offL.get(c.from) || 0) + h);
+    return { c, h, ya };
+  });
+  // Right-hand offsets go in order of where the band came from, so bands do not cross inside a node.
+  [...bands].sort((a, b) => rank.get(a.c.to)! - rank.get(b.c.to)! || rank.get(a.c.from)! - rank.get(b.c.from)!).forEach(b => { (b as typeof b & { yb: number }).yb = yr.get(b.c.to)! + (offR.get(b.c.to) || 0); offR.set(b.c.to, (offR.get(b.c.to) || 0) + b.h); });
+  const mx = (x0 + nw + x1) / 2;
+  return <>
+    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Flow from ${sideLabel(0)} to ${sideLabel(1)}: ${pct(f.stayed)} stayed${f.ordered ? `, ${pct(f.up)} moved up, ${pct(f.down)} moved down` : ''}`}>
+      {bands.map((b, i) => { const yb = (b as typeof b & { yb: number }).yb; return <path key={i} d={`M${x0 + nw},${b.ya} C${mx},${b.ya} ${mx},${yb} ${x1},${yb} L${x1},${yb + b.h} C${mx},${yb + b.h} ${mx},${b.ya + b.h} ${x0 + nw},${b.ya + b.h} Z`} fill={dirColor[b.c.dir]} opacity={b.c.dir === 'same' ? 0.28 : 0.55}><title>{`${b.c.from} → ${b.c.to}: ${b.c.n.toLocaleString()} ${g} (${(b.c.n / f.nodes.find(n => n.key === b.c.from)!.out * 100).toFixed(1)}% of ${b.c.from})`}</title></path>; })}
+      {nodes.map(n => <g key={n.key}>
+        {n.out > 0 && <><rect x={x0} y={yl.get(n.key)} width={nw} height={Math.max(1, n.out * scale)} rx={2} fill={color(v.color)} /><text x={x0 - 6} y={yl.get(n.key)! + n.out * scale / 2 + 4} textAnchor="end" className="lab">{n.key} <tspan className="ax">{n.out.toLocaleString()}</tspan></text></>}
+        {n.in > 0 && <><rect x={x1} y={yr.get(n.key)} width={nw} height={Math.max(1, n.in * scale)} rx={2} fill={color(v.color)} /><text x={x1 + nw + 6} y={yr.get(n.key)! + n.in * scale / 2 + 4} className="lab">{n.key} <tspan className="ax">{n.in.toLocaleString()}</tspan></text></>}
+      </g>)}
+    </svg>
+    <Legend items={[...(f.ordered ? [['var(--ok)', 'moved up'], ['var(--bad)', 'moved down']] as [string, string][] : [[color(v.color), 'changed'] as [string, string]]), ['var(--text-3)', 'stayed'], ['var(--surface-2)', `left: ${sideLabel(0)}; right: ${sideLabel(1)}`]]} />
+    {readout}
+  </>;
+}
+
 // ---------- player card: Baseline, Consistency, Peak, Trend for every measure of the query ----------
 const VERDICT_TEXT: Record<Profile['verdict'], string> = { improving: 'Improving', declining: 'Declining', rising: 'Rising', falling: 'Falling', 'no clear trend': 'No clear trend' };
 function ProfileCard({ v, res, cat }: { v: Visualization; res: Result; cat: Catalog }) {
   const win = v.window || 20;
-  const cards = res.measures.map(m => ({ m, p: profileOf(measureFn(m), res.rows, win) })).filter((c): c is { m: ResolvedMeasure; p: Profile } => !!c.p);
+  const cards = res.measures.map(m => ({ m, p: profileOf(measureFn(m), res.rows, win, v.per || 100) })).filter((c): c is { m: ResolvedMeasure; p: Profile } => !!c.p);
   if (!cards.length) return <Empty msg={`Needs at least 3 ${res.grain}s with a value.`} />;
   const g = res.grain;
   return <>
@@ -546,6 +720,8 @@ export const VIZ_TYPES: { id: Visualization['type']; name: string; needs?: strin
   { id: 'hist', name: 'Histogram' }, { id: 'scatter', name: 'Scatter' }, { id: 'heatmap', name: 'Heatmap', needs: 'two group-bys' },
   { id: 'table', name: 'Table' }, { id: 'sparktable', name: 'Trend table', needs: 'a group-by' }, { id: 'card', name: 'Comparison card' },
   { id: 'profile', name: 'Player card (baseline, consistency, peak, trend)' }, { id: 'ribbon', name: 'Ribbon (rolling baseline and spread)' },
+  { id: 'distribution', name: 'Distribution vs a population', needs: 'one group-by (the bins) and a reference dataset' },
+  { id: 'flow', name: 'Flow (where each group went)', needs: 'two group-bys: where rows started and where they ended up' },
 ];
 
 export function Viz(props: { v: Visualization; res: Result; cat: Catalog }) {
@@ -580,6 +756,8 @@ function VizInner({ v, res, cat }: { v: Visualization; res: Result; cat: Catalog
     case 'card': return <Card v={v} res={res} cat={cat} />;
     case 'profile': return <ProfileCard v={v} res={res} cat={cat} />;
     case 'ribbon': return <Ribbon v={v} res={res} cat={cat} />;
+    case 'distribution': return <Distribution v={v} res={res} cat={cat} />;
+    case 'flow': return <Flow v={v} res={res} cat={cat} />;
   }
   return <Empty msg={`Unknown visualization ${v.type}`} />;
 }

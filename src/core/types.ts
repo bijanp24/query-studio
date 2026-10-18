@@ -150,6 +150,8 @@ export interface Field {
   /** agg 'ratio': the denominator expression; the value is sum(expr)/sum(denominator) over rows where both exist. */
   denominator?: string;
   hidden?: boolean;      // left out of builders unless "show hidden fields" is on (rank in the League model)
+  /** Dimensions: an expression that puts the values in their natural order (rank_step for "Gold IV" … "Challenger"). */
+  sortBy?: string;
   description?: string;
 }
 
@@ -219,7 +221,15 @@ export interface Query {
 
 export type VizType =
   | 'kpi' | 'gauge' | 'bar' | 'column' | 'line' | 'area' | 'hist' | 'scatter'
-  | 'heatmap' | 'table' | 'sparktable' | 'trend' | 'card' | 'profile' | 'ribbon';
+  | 'heatmap' | 'table' | 'sparktable' | 'trend' | 'card' | 'profile' | 'ribbon' | 'distribution' | 'flow';
+
+/**
+ * The population a distribution is drawn against. Its rows are binned by the query's group-by field
+ * (the reference dataset must have a column or field of that name) and counted with weight, an
+ * expression over its rows (the number of accounts in a ladder division). Without weight, a measure
+ * field of the same id on the reference dataset is used, else every row counts once.
+ */
+export interface DistReference { dataset: string; weight?: string; filters?: Filter[]; label?: string }
 
 export interface CardColumn {
   label: string;
@@ -247,6 +257,10 @@ export interface Visualization {
   x?: string;                // scatter: x field
   note?: string;
   card?: { rows: CardRow[]; columns: CardColumn[] };
+  /** profile: trend reported per this many rows (default 100). */
+  per?: number;
+  /** distribution: the reference population. */
+  dist?: DistReference;
 }
 
 export interface Tile { id: string; vizId: string; width?: 2 | 3 | 4 | 6 }

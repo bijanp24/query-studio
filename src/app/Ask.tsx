@@ -33,7 +33,7 @@ export function Ask({ dash, onAdded, onQuery }: { dash?: Dashboard; onAdded?: (v
   };
   const q = ans?.query;
   const res = q ? runCached(cat, q, dash) : null;
-  const v: Visualization | null = q && res ? { id: 'ask', name: ans!.visualization?.name || q.name, queryId: q.id, type: ans!.visualization?.type || autoType(res), color: 1, width: 3, window: ans!.visualization?.window || 10, labels: true, x: ans!.visualization?.x } : null;
+  const v: Visualization | null = q && res ? { id: 'ask', name: ans!.visualization?.name || q.name, queryId: q.id, type: ans!.visualization?.type || autoType(res), color: 1, width: 3, window: ans!.visualization?.window || 10, labels: true, x: ans!.visualization?.x, dist: ans!.visualization?.dist } : null;
   // A suggestion with a saved answer shows it at once, without the model; one without goes to Ask.
   const pick = (s: Suggestion) => {
     setText(s.text); setErr(null); setAns(null);

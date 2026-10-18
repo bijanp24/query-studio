@@ -104,6 +104,16 @@ Four numbers for any measure over rows in sequence (a player over their games, a
 
 Two tile types use it: **Player card** (`profile`, one card per measure) and **Ribbon** (`ribbon`, the rolling baseline with each window's middle half shaded and the peak ringed). The tile's rolling window sets the window size.
 
+## Distribution against a population (`src/core/distribution.ts`)
+
+The **Distribution vs a population** tile (`distribution`) takes a query grouped by one field (the bins) with a count or an additive measure, and counts a reference dataset into the same bins (`Visualization.dist`: dataset, an optional row weight such as the accounts in a ladder division, filters, label). Bins follow the dimension's `sortBy` expression (`rank_step` puts "Iron IV" … "Challenger" in ladder order). From the binned counts alone it reads the same four ideas as the player card, for a cross-section instead of a sequence: Baseline = the bin holding the median and the reference percentile it falls at, Consistency = the bins holding the 25th and 75th percentiles, Peak = the most common bin, plus the shift from the reference median in percentile points and the probability of superiority (ties counted half). Percentiles inside a bin are interpolated linearly. Ask can build it (`visualization.reference`). The plain histogram now shades the middle half and reads out the median, middle half, most common bin and mean.
+
+## Flow between two states (`src/core/flow.ts`)
+
+The **Flow** tile (`flow`) takes a query grouped by two fields, where rows started and where they ended up, with a count, and shows where each starting category went. With 12 categories or fewer it draws bands from left to right; with more, a matrix of row shares. When both fields have a `sortBy`, each move is up, down or stayed, and the readout gives those shares plus the category that gained and the one that lost the most. The League "Rank tracking" dashboard uses it for tier and division flow between rank snapshots.
+
+League datasets behind it: `met_players` (everyone met, rank today), `ladder` (the NA solo-queue ladder per division), `rank_tracking` (players met per rank snapshot; lag columns give each player's change since their previous snapshot) and `my_rank` (the user's accounts over time). `scripts/make_snapshot.py` writes them with other players' Riot IDs and PUUIDs hashed.
+
 **Suggested questions**: a workspace can list `suggestions`, shown as chips under the Ask box. A suggestion with a `vizId` opens that saved visualization at once, with no model call, and can be added to the dashboard or opened in the builder; one without goes to Ask. The League workspace's "Player profile" dashboard and its suggestions are built on these; `lobby_level` uses each player's rank as of the pull until daily rank snapshots exist.
 
 ## SQL path (`src/core/sql.ts`)

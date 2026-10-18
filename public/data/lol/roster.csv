@@ -1,5 +1,5 @@
 riot_id,other_names_seen,games_together,as_ally,as_enemy,your_record_with,your_record_against,seen_on,first_seen,last_seen,rank,ranked_games,ranked_wr,level,last_champion,puuid,top_pct
-Zyra bot#BOT,,5,0,5,0-0,5-0,Velocoraptor,2026-08-05,2026-08-05,Unranked,0,,1,Zyra,BOT,
+player-854cfb,,5,0,5,0-0,5-0,Velocoraptor,2026-08-05,2026-08-05,Unranked,0,,1,Zyra,BOT,
 player-22e158,,2,2,0,2-0,0-0,Velocoraptor,2026-09-06,2026-10-13,Emerald IV,26,0.654,1267,Nami,e4f59029aa9e,16.37
 player-f3048d,,2,1,1,0-1,0-1,Velocoraptor,2026-08-10,2026-08-10,Silver I,12,0.583,24,Jax,3b778d017096,60.35
 player-8600f8,,2,2,0,2-0,0-0,Velocoraptor,2026-09-06,2026-10-13,Platinum IV,26,0.654,243,Kaisa,be012351ff6c,33.51
@@ -172,8 +172,8 @@ player-f9a988,,1,0,1,0-0,0-1,takinturrets,2026-10-04,2026-10-04,Gold II,88,0.455
 player-b333ec,,1,0,1,0-0,1-0,asd123456efg,2026-02-22,2026-02-22,Diamond III,1312,0.509,395,Camille,61aa1522e8be,2.51
 player-083cf2,,1,1,0,0-1,0-0,Velocoraptor,2026-09-13,2026-09-13,Platinum III,269,0.558,235,Lux,016097a5fc3f,26.45
 player-8a0222,,1,0,1,0-0,0-1,takinturrets,2026-10-10,2026-10-10,Gold II,153,0.497,45,Zac,6c4b8a106fe0,38.42
-BOT Raf#NA1,,1,1,0,1-0,0-0,Velocoraptor,2026-08-20,2026-08-20,Platinum II,42,0.5,805,Pyke,e268f93c48bf,19.46
-BOT Sean#haha,,1,0,1,0-0,1-0,asd123456efg,2026-07-26,2026-07-26,Gold III,539,0.512,121,Skarner,608207c240bf,48.41
+player-8528e5,,1,1,0,1-0,0-0,Velocoraptor,2026-08-20,2026-08-20,Platinum II,42,0.5,805,Pyke,e268f93c48bf,19.46
+player-06ce06,,1,0,1,0-0,1-0,asd123456efg,2026-07-26,2026-07-26,Gold III,539,0.512,121,Skarner,608207c240bf,48.41
 player-d1ecbd,,1,1,0,1-0,0-0,Velocoraptor,2026-08-20,2026-08-20,Emerald II,118,0.534,342,XinZhao,06538888f7bb,8.47
 player-c8a7e7,,1,1,0,0-1,0-0,asd123456efg,2026-07-27,2026-07-27,Unranked,0,,365,XinZhao,ff2bc21cd254,
 player-f77238,,1,1,0,0-1,0-0,takinturrets,2026-09-30,2026-09-30,Gold IV,645,0.49,265,Caitlyn,d5134759caf7,54.52
@@ -2105,7 +2105,7 @@ player-8361b3,,1,0,1,0-0,0-1,Velocoraptor,2026-09-13,2026-09-13,Emerald III,48,0
 player-94c04d,,1,1,0,1-0,0-0,asd123456efg,2026-07-26,2026-07-26,Unranked,0,,746,Vayne,42e19d00e85a,
 player-f787fc,,1,0,1,0-0,0-1,asd123456efg,2026-10-13,2026-10-13,Platinum IV,367,0.501,586,Kayn,8f27dbc6858e,31.19
 player-0b998e,,1,0,1,0-0,0-1,asd123456efg,2026-07-25,2026-07-25,Gold II,5,0.6,172,Brand,64f8ef131942,40.27
-asnbs#BOT,,1,1,0,0-1,0-0,asd123456efg,2026-07-19,2026-07-19,Gold II,506,0.53,519,Viego,116650a915d0,41.71
+player-734e38,,1,1,0,0-1,0-0,asd123456efg,2026-07-19,2026-07-19,Gold II,506,0.53,519,Viego,116650a915d0,41.71
 player-13fb18,,1,0,1,0-0,0-1,asd123456efg,2026-02-28,2026-02-28,Emerald III,316,0.516,157,Aurora,898dd518e5bd,10.99
 player-cc2508,,1,1,0,0-1,0-0,takinturrets,2026-07-18,2026-07-18,Bronze I,1367,0.496,373,MissFortune,d11ef27b03f9,79.63
 player-a1df95,,1,1,0,1-0,0-0,asd123456efg,2026-09-03,2026-09-03,Platinum I,564,0.504,468,JarvanIV,3d66d99a6a01,17.87
