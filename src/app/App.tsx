@@ -19,6 +19,7 @@ import { Check, Sel, Txt, uid } from './ui';
 declare const __DEFAULT_WS__: string;
 const SEEDS: Record<string, () => Workspace> = { lol: lolWorkspace, fieldtrials: fieldTrialsWorkspace };
 interface RegEntry { id: string; name: string }
+const GUIDE_URL = 'https://github.com/bijanp24/query-studio/blob/main/docs/guide/README.md';
 const TABS: [Tab, string][] = [['dashboards', 'Dashboards'], ['queries', 'Queries'], ['visualizations', 'Visualizations'], ['sources', 'Data sources'], ['datasets', 'Datasets'], ['model', 'Semantic model']];
 
 const itemDef = (ws: Workspace, id: string) => { const it = ws.items.find(i => i.id === id); if (!it) return ''; const { rows: _r, ...rest } = it; void _r; return JSON.stringify([rest, ws.sources.find(s => s.id === it.sourceId)]); };
@@ -137,6 +138,7 @@ export function App() {
       <span className="grow" />
       <Check checked={showHidden} onChange={setShowHidden}>show hidden fields</Check>
       <span className={'saved small ' + saved}>{saved === 'saving' ? 'Saving…' : saved === 'saved' ? (store?.kind === 'account' ? 'Saved to your account' : store?.kind === 'browser' ? 'Saved in this browser' : 'Not saved') : saved === 'error' ? 'Could not save' : ''}</span>
+      <a className="btnlink" href={GUIDE_URL} target="_blank" rel="noopener noreferrer" title="How to use Query Studio (opens in a new tab)">Guide</a>
       <button className="ghost" onClick={exportWs}>Export</button>
       {SEEDS[ws.id] ? <button className="ghost" onClick={resetSeed} title="Discard your changes to this example">Reset</button> : <button className="ghost" onClick={() => setMenu(menu === 'delete' ? null : 'delete')}>Delete</button>}
     </header>

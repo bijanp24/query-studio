@@ -8,6 +8,8 @@ Every push to main deploys the static build to GitHub Pages (`.github/workflows/
 
 The League workspace includes a "Player profile" dashboard: Baseline, Consistency, Peak and Trend for any measure, with suggested questions under the Ask box that guide new users.
 
+**New here? Read the [user guide](docs/guide/README.md)**: getting started, loading your own data, building queries, choosing visualizations, assembling dashboards, Ask, the Player profile, and running it locally. The app links to it from the **Guide** button in the top bar.
+
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the object model, processed layer, semantic layer, query engine, SQL compiler and the player-profile measures.
 
 ## Develop
