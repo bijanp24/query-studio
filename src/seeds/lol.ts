@@ -43,6 +43,7 @@ export function lolWorkspace(): Workspace {
         { name: 'role_game_no', expr: '1', window: { fn: 'row_number', partitionBy: ['position'] } },
         { name: 'champ_experience', expr: "if(champ_game_no <= 10, '01-10', if(champ_game_no <= 25, '11-25', if(champ_game_no <= 50, '26-50', if(champ_game_no <= 150, '51-150', '151+'))))" },
         { name: 'hard_champion', expr: "decode(champion, 'LeeSin', 1, 'Riven', 1, 'Azir', 1, 'Gangplank', 1, 'Yasuo', 1, 'Qiyana', 1, 'Aphelios', 1, 'Kalista', 1, 0)" },
+        { name: 'lobby_level', expr: '100 - (4 * ally_avg_top_pct + 5 * enemy_avg_top_pct) / 9' },
       ],
     },
     { id: 'game_lobby', name: 'My games: lobby strength', grain: 'game', sequence: 'game_start_utc', feeds: both('my_games'), key: ['account', 'match_id'], description: 'Average ladder position of allies and enemies per game (rank-based, hidden by default).' },
@@ -56,7 +57,7 @@ export function lolWorkspace(): Workspace {
         { name: 'kda', expr: '(kills + assists) / max(deaths, 1)' },
       ],
     },
-    { id: 'roster', name: 'Players met', grain: 'player', feeds: both('roster', true), key: ['puuid'], description: 'One row per player who shared a game with you: games together, record with and against, rank, level.', derived: [{ name: 'tier', expr: "split_part(rank, ' ', 1)" }] },
+    { id: 'roster', name: 'Players met', grain: 'player', feeds: both('roster', true), key: ['puuid'], description: 'One row per player who shared a game with you: games together, record with and against, rank, level.', derived: [{ name: 'tier', expr: "split_part(rank, ' ', 1)" }, { name: 'ladder_pct', expr: '100 - top_pct' }] },
     { id: 'lobby_relative', name: 'Lobby-relative players', grain: 'player', feeds: both('lobby_relative', true), key: ['puuid'], description: 'Each player met (and your accounts): ranked-solo averages, their lead over their own lane opponents (rel_*), and what their opponents average (their_opp_*).' },
     { id: 'champion_baselines', name: 'Champion baselines', grain: 'role × champion', feeds: both('champion_baselines', true), key: ['position', 'champion'] },
     { id: 'tier_baselines', name: 'Tier baselines', grain: 'role × tier', feeds: both('tier_baselines', true), key: ['position', 'tier'] },
@@ -95,6 +96,7 @@ export function lolWorkspace(): Workspace {
     { id: 'w_duration', dataset: 'games', role: 'weight', label: 'Game length (time-weighted)', expr: 'duration_min', type: 'number', description: 'Every minute played counts the same, so long games weigh more.' },
     { id: 'w_highlights', dataset: 'games', role: 'weight', label: 'My highlights', expr: 'game_weight', type: 'number', description: 'The weight you gave each game in the row list; 1 when unset.' },
     F('games', 'highlighted', 'highlighted games', { agg: 'sum', format: 'integer', additivity: 'additive', polarity: 'neutral' }),
+    F('games', 'lobby_level', 'lobby level (ladder percentile)', { agg: 'median', format: 'decimal1', polarity: 'neutral', description: 'Where the other nine players in the game sit on the ladder, 0 to 100 (50 = the median player, 69 = Plat IV). Uses each player\'s rank as of the pull, not their rank on the day of the game.' }),
     ...hiddenRank('games', ['ally_avg_top_pct', 'enemy_avg_top_pct', 'opp_ranked_wr', 'opp_level_at_game', 'opp_division']),
     // lobby players
     D('lobby_players', 'queue_name', 'queue'), D('lobby_players', 'champion', 'champion'), D('lobby_players', 'position', 'role'), D('lobby_players', 'riot_id', 'player'),
@@ -107,6 +109,7 @@ export function lolWorkspace(): Workspace {
     D('roster', 'riot_id', 'player'), D('roster', 'seen_on', 'seen on account'), D('roster', 'tier', 'tier', { hidden: true }), D('roster', 'rank', 'rank', { hidden: true }),
     F('roster', 'games_together', 'games together', { additivity: 'additive', agg: 'sum', format: 'integer' }),
     F('roster', 'ranked_wr', 'ranked win rate', { format: 'percent', hidden: true }), F('roster', 'level', 'summoner level', { polarity: 'neutral' }),
+    F('roster', 'ladder_pct', 'ladder percentile', { agg: 'median', format: 'decimal1', description: 'Where the player sits on the ladder today, 0 to 100 (50 = the median ranked player). Players with no rank have no value.' }),
     ...hiddenRank('roster', ['top_pct', 'ranked_games']),
     ...hiddenRank('lobby_relative', ['rank']),
   ];
@@ -144,6 +147,12 @@ export function lolWorkspace(): Workspace {
     Q({ id: 'q_gp_showcase', name: 'Gangplank showcase: win rate and CS per min, last 25 Gangplank games', last: 25, filters: [...RS, { field: 'champion', op: '=', value: 'Gangplank' }], measures: [{ field: 'win' }, { field: 'cs_per_min' }, { field: 'solo_kills' }], compare: LOBBY_ROLE_CHAMP }),
     Q({ id: 'q_curve', name: 'Win rate by games played on the champion', last: 0, filters: RS, measures: [{ field: 'win' }, { agg: 'count' }], groupBy: [{ field: 'champ_experience' }], sort: 'key_asc' }),
     Q({ id: 'q_curve_w', name: 'KDA with the learning-curve weighting', last: 0, filters: RS, measures: m('kda_ratio'), weight: 'w_learning_curve' }),
+    // Player profile: Baseline, Consistency, Peak, Trend
+    Q({ id: 'q_bcpt', name: 'My profile: all solo-queue games', last: 0, filters: RS, measures: [{ field: 'lobby_level' }, { field: 'cs_per_min', agg: 'median' }, { field: 'solo_kills' }, { field: 'vision_pm', agg: 'median' }, { field: 'win' }] }),
+    Q({ id: 'q_lobby_level', name: 'Lobby level over my solo-queue games', last: 0, filters: RS, measures: m('lobby_level') }),
+    Q({ id: 'q_cs_ribbon', name: 'CS per min over my solo-queue games', last: 0, filters: RS, measures: m('cs_per_min', 'median') }),
+    Q({ id: 'q_lobby_by_acct', name: 'Lobby level by account', last: 0, filters: RS, measures: [{ field: 'lobby_level', label: 'lobby level, median' }, { field: 'lobby_level', agg: 'p25', label: 'lower quartile' }, { field: 'lobby_level', agg: 'p75', label: 'upper quartile' }, { agg: 'count' }], groupBy: [{ field: 'account_name' }], minRows: 5 }),
+    Q({ id: 'q_met_pct', name: 'Everyone I have played with or against: ladder percentile today', dataset: 'roster', last: 0, measures: m('ladder_pct') }),
     Q({ id: 'q_curve_w2', name: 'Win rate with the learning-curve weighting', last: 0, filters: RS, measures: m('win'), weight: 'w_learning_curve' }),
   ];
   const vizs: Visualization[] = [
@@ -183,12 +192,18 @@ export function lolWorkspace(): Workspace {
     V({ id: 'v_curve', name: 'Win rate by games played on the champion', queryId: 'q_curve', type: 'column', color: 3, width: 3, note: 'Counted within this history, in time order, across all accounts.' }),
     V({ id: 'v_curve_w2', name: 'Win rate, learning-curve weighted', queryId: 'q_curve_w2', type: 'kpi', color: 6, width: 3, note: 'Hard champions count half until their 150th game. The unweighted rate is shown underneath.' }),
     V({ id: 'v_gp_show', name: 'Gangplank, last 25: vs lobby players on Gangplank', queryId: 'q_gp_showcase', type: 'kpi', color: 2, width: 3 }),
+    V({ id: 'v_profile', name: 'My profile: baseline, consistency, peak, trend', queryId: 'q_bcpt', type: 'profile', color: 1, width: 6, window: 20, note: 'Baseline = all games. Consistency = the middle half. Peak = the best 20-game stretch. Trend = change per 100 games, called only when its 95% range leaves zero.' }),
+    V({ id: 'v_lobby_ribbon', name: 'Lobby level: rolling baseline and spread', queryId: 'q_lobby_level', type: 'ribbon', color: 4, width: 3, window: 20, note: 'Rank-based: uses each player\'s rank as of the pull. Daily rank snapshots will replace this with rank at game time.' }),
+    V({ id: 'v_cs_ribbon', name: 'CS per min: rolling baseline and spread', queryId: 'q_cs_ribbon', type: 'ribbon', color: 1, width: 3, window: 20 }),
+    V({ id: 'v_lobby_acct', name: 'Lobby level by account', queryId: 'q_lobby_by_acct', type: 'table', width: 3 }),
+    V({ id: 'v_met_hist', name: 'Players met: ladder percentile today', queryId: 'q_met_pct', type: 'hist', color: 5, width: 3, note: 'Everyone who shared a game with you, all accounts. 50 = the median ranked player.' }),
   ];
   const T = (ids: string[]): Dashboard['tiles'] => ids.map((vizId, i) => ({ id: `t_${vizId}_${i}`, vizId }));
   const dashboards: Dashboard[] = [
     { id: 'd_lens', name: 'Lobby lens (no rank)', filters: [], tiles: T(['v_card', 'v_solo', 'v_vision', 'v_rel', 'v_jg']) },
     { id: 'd_trends', name: 'Trends & improvement', filters: [], tiles: T(['v_t_cs', 'v_t_win', 'v_t_lead', 'v_t_vision', 'v_t_slope', 'v_t_cum', 'v_t_delta']) },
     { id: 'd_showcase', name: 'Showcase & weights', filters: [], tiles: T(['v_curve', 'v_curve_w2', 'v_cs_plain', 'v_cs_len', 'v_showcase', 'v_gp_show', 'v_monthly']) },
+    { id: 'd_profile', name: 'Player profile', filters: [], tiles: T(['v_profile', 'v_lobby_ribbon', 'v_cs_ribbon', 'v_met_hist', 'v_lobby_acct']) },
     { id: 'd_matchups', name: 'Champions & matchups', filters: [], tiles: T(['v_champ_wr', 'v_gp', 'v_kda_champ', 'v_heat']) },
   ];
   return {
@@ -198,8 +213,18 @@ export function lolWorkspace(): Workspace {
       'games.queue values: Ranked Solo, Ranked Flex, Normal Draft, Swiftplay. lobby_players.queue_name has the same names. position values: TOP, JUNGLE, MIDDLE, BOTTOM, UTILITY.',
       'opp_* columns on games are the lane opponent in the same game (opp_cs_per_min, opp_solo_kills, opp_kp, opp_vision_pm, opp_dmg_pm, opp_gold_pm, opp_obj_takedowns, opp_obj_damage, opp_lane_gold_adv, opp_cs_at_10). opp_rel_* = that opponent\'s average lead over their own lane opponents (second-degree baseline; opp_rel_cspm for CS per min). rel_* = the user\'s lead over the lane opponent.',
       'Default comparison for "vs my lobbies / lobby players" is reference dataset lobby_players filtered queue_name = Ranked Solo, weightBy position. "vs my lane opponents" is paired with the opp_ column. Rank and tier fields are hidden; do not build on them unless asked.',
+      'Player profile: lobby_level = where the other nine players sit on the ladder (0-100 percentile, rank as of the pull). Baseline, consistency, peak and trend of any measure = viz type profile (one card per measure, no groupBy, last 0); a rolling baseline with its spread = viz type ribbon. Use agg median for per-game stats when the user asks for baseline or consistency; p25, p75 and iqr are available. roster.ladder_pct = each player met, ladder percentile today.',
       'game_weight = the user\'s highlight weight per game (1 when unset); highlighted = 1 for games weighted above 1. "Showcase", "highlight", "my best games" → weight game_weight or filter highlighted = 1. Weighting schemes are fields with role weight (w_learning_curve, w_main_role, w_support_half, w_duration, w_highlights); set query.weight to a weight field id or to an expression such as if(position = \'UTILITY\', 0.5, 1) or if(champion = \'Riven\' and champ_game_no > 150, 2, 1). champ_game_no = the Nth game on that champion in this history; champ_experience buckets it; hard_champion = 1 for mechanically hard champions. Time-weighted CS/min = field cs_per_min_tw (ratio of total CS to total minutes). enemy_jg_ganks_pre15 exists only for the user\'s own games.',
     ].join('\n'),
-    sources, items, datasets, fields, queries, visualizations: vizs, dashboards, activeDashboard: 'd_lens', seedVersion: 1,
+    suggestions: [
+      { text: 'My baseline, consistency, peak and trend', vizId: 'v_profile' },
+      { text: 'Is my lobby level rising or falling?', vizId: 'v_lobby_ribbon' },
+      { text: 'Rank of everyone I have played with or against', vizId: 'v_met_hist' },
+      { text: 'Which account gets the hardest lobbies?', vizId: 'v_lobby_acct' },
+      { text: 'Is my CS per min more consistent on Gangplank than on my other champions?' },
+      { text: 'My peak 20-game stretch for solo kills, and when it was' },
+      { text: 'Are my solo kills rising while my lobby level stays flat?' },
+    ],
+    sources, items, datasets, fields, queries, visualizations: vizs, dashboards, activeDashboard: 'd_lens', seedVersion: 2,
   };
 }

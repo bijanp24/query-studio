@@ -42,6 +42,8 @@ function extras(wsId: string): Query[] {
     Q({ id: 'x_paired', dataset: 'plots', measures: [{ field: 'yield_t_ha' }], compare: { kind: 'paired', expr: 'yield_t_ha * 0.9', label: '90%' } }),
     Q({ id: 'x_in_contains', dataset: 'plots', filters: [{ field: 'crop', op: 'in', value: 'Maize, Wheat' }, { field: 'variety', op: 'contains', value: 'a' }], measures: [{ field: 'n_applied_kg_ha' }, { field: 'soil_ph' }, { agg: 'count_distinct', expr: 'variety' }] }),
     Q({ id: 'x_minmax', dataset: 'plots', measures: [{ agg: 'min', expr: 'yield_t_ha' }, { agg: 'max', expr: 'yield_t_ha' }, { agg: 'median', expr: 'yield_t_ha' }, { agg: 'count_values', expr: 'corrected_by' }], groupBy: [{ field: 'crop' }] }),
+    Q({ id: 'x_quartiles', dataset: 'plots', measures: [{ agg: 'p25', expr: 'yield_t_ha' }, { agg: 'p75', expr: 'yield_t_ha' }, { agg: 'iqr', expr: 'yield_t_ha' }], groupBy: [{ field: 'farm' }] }),
+    Q({ id: 'x_quartiles_all', dataset: 'plots', measures: [{ field: 'n_applied_kg_ha', agg: 'p25' }, { field: 'n_applied_kg_ha', agg: 'iqr' }] }),
     Q({ id: 'x_weather', dataset: 'weather_monthly', measures: [{ agg: 'avg', expr: 'rain_mm' }], groupBy: [{ field: 'month' }] }),
     Q({ id: 'x_expr_fns', dataset: 'plots', measures: [{ agg: 'avg', expr: "if(crop = 'Maize', yield_t_ha * 2, nullif(yield_t_ha, 0))" }, { agg: 'sum', expr: 'round(area_ha / 3, 1)' }] }),
   ];
@@ -54,6 +56,7 @@ function extras(wsId: string): Query[] {
     Q({ id: 'x_g_week', dataset: 'games', measures: [{ agg: 'count' }], groupBy: [{ field: 'game_start_utc', grain: 'week' }], sort: 'key_asc' }),
     Q({ id: 'x_g_roll_grouped', dataset: 'games', measures: [{ field: 'cs_per_min' }], groupBy: [{ field: 'position' }], series: { op: 'rolling', window: 10 } }),
     Q({ id: 'x_g_ref_plain', dataset: 'games', filters: [{ field: 'queue', op: '=', value: '420' }], measures: [{ field: 'deaths' }], compare: { kind: 'reference', dataset: 'lobby_players', filters: [], weightBy: [], label: 'all lobby players' } }),
+    Q({ id: 'x_g_quartiles', dataset: 'games', measures: [{ field: 'cs_per_min', agg: 'p25' }, { field: 'cs_per_min', agg: 'median' }, { field: 'cs_per_min', agg: 'p75' }, { field: 'cs_per_min', agg: 'iqr' }], groupBy: [{ field: 'position' }] }),
     Q({ id: 'x_lp_group', dataset: 'lobby_players', measures: [{ agg: 'avg', expr: 'deaths' }, { agg: 'count' }], groupBy: [{ field: 'queue_name' }] }),
   ];
 }

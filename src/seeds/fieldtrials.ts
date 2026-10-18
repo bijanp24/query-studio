@@ -32,6 +32,7 @@ export function fieldTrialsWorkspace(): Workspace {
     Q({ id: 'f_n', name: 'Maize yield vs nitrogen applied', filters: [{ field: 'crop', op: '=', value: 'Maize' }], measures: [{ field: 'yield_plain' }] }),
     Q({ id: 'f_season', name: 'Maize yield vs the 2024 season', filters: [{ field: 'crop', op: '=', value: 'Maize' }, { field: 'season', op: '=', value: '2025' }], measures: [{ field: 'yield_t_ha' }], compare: { kind: 'reference', dataset: 'plots', filters: [{ field: 'crop', op: '=', value: 'Maize' }, { field: 'season', op: '=', value: '2024' }], weightBy: ['variety'], label: '2024, same variety mix' } }),
     Q({ id: 'f_top', name: 'Best two varieties per crop (fields of 1 ha or more)', filters: [{ field: 'area_ha', op: '>=', value: '1' }], measures: [{ field: 'yield_t_ha' }], groupBy: [{ field: 'crop' }, { field: 'variety' }], sort: 'value_desc', limit: 2 }),
+    Q({ id: 'f_profile', name: 'Maize plots in planting order', filters: [{ field: 'crop', op: '=', value: 'Maize' }], measures: [{ field: 'yield_plain', agg: 'median' }, { field: 'n_applied_kg_ha', agg: 'median' }] }),
   ];
   const vizs: Visualization[] = [
     V({ id: 'fv_yield', name: 'Yield: area-weighted, simple average, production ÷ area', queryId: 'f_yield', type: 'table', width: 3, note: 'Small trial plots get more care and yield more, so the simple average flatters the farm.' }),
@@ -43,6 +44,8 @@ export function fieldTrialsWorkspace(): Workspace {
     V({ id: 'fv_n', name: 'Maize: yield vs nitrogen', queryId: 'f_n', type: 'scatter', x: 'n_applied_kg_ha', color: 6, width: 3 }),
     V({ id: 'fv_season', name: 'Maize 2025 vs 2024', queryId: 'f_season', type: 'kpi', color: 4, width: 3 }),
     V({ id: 'fv_top', name: 'Top two varieties per crop', queryId: 'f_top', type: 'table', width: 3 }),
+    V({ id: 'fv_profile', name: 'Maize: baseline, consistency, peak, trend', queryId: 'f_profile', type: 'profile', color: 3, width: 6, window: 10, note: 'The same player card as League, over plots in planting order. Trend is per 100 plots.' }),
+    V({ id: 'fv_ribbon', name: 'Maize yield: rolling baseline and spread', queryId: 'f_profile', type: 'ribbon', color: 3, width: 6, window: 10 }),
   ];
   const dashboards: Dashboard[] = [{ id: 'fd_main', name: 'Field trials', filters: [], tiles: vizs.map((v, i) => ({ id: `ft_${i}`, vizId: v.id })) }];
   return {
@@ -76,6 +79,12 @@ export function fieldTrialsWorkspace(): Workspace {
       { id: 'weather_monthly', name: 'Weather by month', grain: 'station-month', feeds: [{ itemId: 'weather_json', priority: 1 }], key: ['station_id', 'month'] },
       { id: 'zones', name: 'Rainfall zones', grain: 'zone', feeds: [{ itemId: 'zones_manual', priority: 1 }], key: ['zone'] },
     ],
-    fields, queries, visualizations: vizs, dashboards, activeDashboard: 'fd_main', seedVersion: 1,
+    suggestions: [
+      { text: 'Baseline, consistency, peak and trend of maize yield', vizId: 'fv_profile' },
+      { text: 'Which variety yields the most, weighted by area?', vizId: 'fv_variety' },
+      { text: 'Is maize yield more consistent with more nitrogen?' },
+      { text: 'Middle half of yields by farm' },
+    ],
+    fields, queries, visualizations: vizs, dashboards, activeDashboard: 'fd_main', seedVersion: 2,
   };
 }

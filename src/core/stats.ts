@@ -9,6 +9,12 @@ export function variance(a: number[]) {
   const m = mean(a); if (m == null || a.length < 2) return 0;
   return a.reduce((s, x) => s + (x - m) ** 2, 0) / (a.length - 1);
 }
+/** Linear-interpolation percentile, the same as SQL PERCENTILE_CONT and DuckDB QUANTILE_CONT. */
+export function quantile(a: number[], p: number) {
+  if (!a.length) return null;
+  const s = [...a].sort((x, y) => x - y), pos = p * (s.length - 1), lo = Math.floor(pos);
+  return lo + 1 < s.length ? s[lo] + (pos - lo) * (s[lo + 1] - s[lo]) : s[lo];
+}
 /** Least-squares line through (0..n-1, y). Matches SQL REGR_SLOPE(y, row_index). */
 export function ols(y: number[]) {
   const n = y.length;
@@ -18,6 +24,21 @@ export function ols(y: number[]) {
   y.forEach((v, i) => { sxy += (i - xm) * (v - ym); sxx += (i - xm) ** 2; syy += (v - ym) ** 2; });
   const slope = sxx ? sxy / sxx : 0;
   return { slope, intercept: ym - slope * xm, r2: syy && sxx ? (sxy * sxy) / (sxx * syy) : 0, n };
+}
+/** Standard error of the least-squares slope over (0..n-1, y). */
+export function slopeSE(y: number[]) {
+  const n = y.length; if (n < 3) return null;
+  const { slope, intercept } = ols(y), xm = (n - 1) / 2;
+  let sse = 0, sxx = 0;
+  y.forEach((v, i) => { sse += (v - (intercept + slope * i)) ** 2; sxx += (i - xm) ** 2; });
+  return sxx ? Math.sqrt(sse / (n - 2) / sxx) : null;
+}
+/** Two-sided 95% critical value of Student's t with df degrees of freedom. */
+export function t95(df: number) {
+  if (!(df > 0)) return NaN;
+  let lo = 1.9, hi = 15;
+  for (let k = 0; k < 60; k++) { const mid = (lo + hi) / 2; if (tPvalue(mid, df) > 0.05) lo = mid; else hi = mid; }
+  return (lo + hi) / 2;
 }
 export function pearson(x: number[], y: number[]) {
   const n = Math.min(x.length, y.length); if (n < 3) return null;

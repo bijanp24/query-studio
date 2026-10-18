@@ -6,7 +6,9 @@ The first build is a single-page web app with two example workspaces: League of 
 
 Every push to main deploys the static build to GitHub Pages (`.github/workflows/pages.yml`). That copy opens on the field-trials example, because the League snapshot is not published, and Ask and live project files show a note that they need claude.ai.
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the object model, processed layer, semantic layer, query engine and SQL compiler.
+The League workspace includes a "Player profile" dashboard: Baseline, Consistency, Peak and Trend for any measure, with suggested questions under the Ask box that guide new users.
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the object model, processed layer, semantic layer, query engine, SQL compiler and the player-profile measures.
 
 ## Develop
 

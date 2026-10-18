@@ -90,7 +90,21 @@ FROM dataset → WHERE (query + dashboard filters) → last N by sequence
   - `target`: a fixed number.
   - `paired`: another column on the same rows, such as the lane opponent's.
   - `reference`: the same measure over another dataset, weighted by this query's own mix of the chosen dimensions. "Lobby players, same role" weights the lobby by how often you play each role. Grouped results also get a per-group reference.
+- **Percentiles**: `p25`, `p75` and `iqr` (p75 − p25) use linear interpolation, the same as SQL `PERCENTILE_CONT`. They are not weightable.
 - Results are cached per build and per query definition.
+
+## Player profile: Baseline, Consistency, Peak, Trend (`src/core/profile.ts`)
+
+Four numbers for any measure over rows in sequence (a player over their games, a plot over its seasons):
+
+- **Baseline**: the measure over every row, with the query's own aggregation and weights.
+- **Consistency**: the middle half (p25 to p75). For a median, percentile, min or max it is taken over single rows; for an average, rate, sum or ratio it is taken over rolling windows, because a single game's win is 0 or 1.
+- **Peak**: the best rolling window, by the measure's polarity, with the row it ends on. It sits above the baseline by luck alone, so it is always shown next to the baseline.
+- **Trend**: the least-squares slope per 100 rows with a t-based 95% range. A verdict (improving / declining, or rising / falling for neutral measures) is given only when the range excludes zero.
+
+Two tile types use it: **Player card** (`profile`, one card per measure) and **Ribbon** (`ribbon`, the rolling baseline with each window's middle half shaded and the peak ringed). The tile's rolling window sets the window size.
+
+**Suggested questions**: a workspace can list `suggestions`, shown as chips under the Ask box. A suggestion with a `vizId` opens that saved visualization at once, with no model call, and can be added to the dashboard or opened in the builder; one without goes to Ask. The League workspace's "Player profile" dashboard and its suggestions are built on these; `lobby_level` uses each player's rank as of the pull until daily rank snapshots exist.
 
 ## SQL path (`src/core/sql.ts`)
 
@@ -100,8 +114,9 @@ FROM dataset → WHERE (query + dashboard filters) → last N by sequence
 - `compileDataset` emits the processed-layer build as one `CREATE TABLE … AS WITH`: a UNION ALL of feeds with explicit columns, then `ROW_NUMBER` replace or first-non-null coalesce, the fallback `NOT EXISTS`, early derived columns, joins, and late derived and window columns.
 - Every query has a SQL tab with a dialect picker, and every dataset has a "Build SQL" section.
 - The weighted median has no portable SQL form, and the SQL tab says so.
+- Percentiles compile to `QUANTILE_CONT` in DuckDB, `PERCENTILE_CONT … WITHIN GROUP` in PostgreSQL and Redshift, and `APPROX_QUANTILES` in BigQuery, where it is approximate.
 
-**Parity test**: `test/parity.ts` builds both workspaces from the live project files, runs every seed query plus extra cases through the engine, and dumps the tables and compiled SQL. `test/parity_check.py` runs the SQL in DuckDB 1.5.6 and compares. The latest run passed 65 of 65: 10 dataset builds and 55 queries, covering weights, ratios, HAVING, ROLLUP, top-N per group, every series operator, every compare kind, time grains and expression functions.
+**Parity test**: `test/parity.ts` builds both workspaces from the live project files, runs every seed query plus extra cases through the engine, and dumps the tables and compiled SQL. `test/parity_check.py` runs the SQL in DuckDB 1.5.6 and compares. The latest run passed 74 of 74: 10 dataset builds and 64 queries, covering weights, ratios, percentiles, HAVING, ROLLUP, top-N per group, every series operator, every compare kind, time grains and expression functions.
 
 ## Ask (`src/app/askModel.ts`)
 

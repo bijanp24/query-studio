@@ -10,7 +10,7 @@
 import type { Agg, Compare, Dashboard, Field, Filter, Query, Row, Table, TimeGrain, Value, Workspace } from './types';
 import { compile, evaluate, toNum, toTime, type Node } from './expr';
 import { fieldExpr, fieldsFor, missingColumns, resolveMeasure, type ResolvedMeasure } from './semantic';
-import { ols } from './stats';
+import { ols, quantile } from './stats';
 
 export interface Group { keys: Value[]; n: number; values: (number | null)[]; rows: Row[]; compare?: number | null; total?: 'subtotal' | 'grand' }
 export interface SeriesPoint { v: number; row: Row; i: number }
@@ -110,6 +110,9 @@ export function aggregateParts(parts: Part[], agg: Agg, weighted: boolean, rowCo
     case 'sum': return xs.reduce((a, b) => a + b, 0);
     case 'avg': case 'rate': return xs.reduce((a, b) => a + b, 0) / xs.length;
     case 'median': { const s = xs.sort((a, b) => a - b), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
+    case 'p25': return quantile(xs, 0.25);
+    case 'p75': return quantile(xs, 0.75);
+    case 'iqr': return quantile(xs, 0.75)! - quantile(xs, 0.25)!;
     case 'min': return Math.min(...xs);
     case 'max': return Math.max(...xs);
   }
