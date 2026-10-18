@@ -50,6 +50,8 @@ export function Vizs() {
             <Row label="Width"><Sel value={String(v.width)} onChange={x => set({ width: Number(x) as Visualization['width'] })} options={[['2', 'a third'], ['3', 'half'], ['4', 'two thirds'], ['6', 'full width']]} /></Row>
             {['line', 'area', 'trend', 'sparktable', 'profile', 'ribbon'].includes(v.type) && <Row label="Rolling window" hint="Rows per point when the query has no series operator of its own."><Num className="n8" value={v.window} min={2} onChange={x => set({ window: x || 10 })} /></Row>}
             {v.type === 'scatter' && q && <Row label="Horizontal axis"><Sel value={v.x || ''} blank="pick a field" onChange={x => set({ x })} options={fieldOptions(fieldsFor(ws, q.dataset, cat.tables[q.dataset]), app.showHidden, ['measure'])} /></Row>}
+            {v.type === 'distribution' && <DistEditor v={v} set={set} />}
+            {v.type === 'profile' && <Row label="Trend per" hint="The trend is reported as the change per this many rows."><Num className="n8" value={v.per ?? 100} min={1} onChange={x => set({ per: x || 100 })} /></Row>}
             {v.type === 'column' && <Row label="Options"><Check checked={v.stack} onChange={x => set({ stack: x })}>stack the second group</Check></Row>}
             <Row label="Labels"><Check checked={v.labels !== false} onChange={x => set({ labels: x })}>show value labels</Check></Row>
             <Row label="Note"><textarea value={v.note || ''} onChange={e => set({ note: e.target.value })} placeholder="What the reader should know about this tile" rows={2} /></Row>
@@ -60,6 +62,21 @@ export function Vizs() {
       </div>}
     </section>
   </div>;
+}
+
+function DistEditor({ v, set }: { v: Visualization; set: (p: Partial<Visualization>) => void }) {
+  const { ws, cat, showHidden } = useApp();
+  const d = v.dist;
+  const rf = d?.dataset ? fieldsFor(ws, d.dataset, cat.tables[d.dataset]) : [];
+  const setD = (p: Partial<NonNullable<Visualization['dist']>>) => { const n = { dataset: '', ...d, ...p }; set({ dist: n.dataset ? n : undefined }); };
+  return <>
+    <Row label="Compare with" hint="A population counted into the same bins: it needs the query's group-by field."><Sel value={d?.dataset || ''} blank="no reference" onChange={x => setD({ dataset: x })} options={ws.datasets.map(x => [x.id, x.name] as [string, string])} /></Row>
+    {d?.dataset && <>
+      <Row label="Count each row as" hint="An expression over the reference rows, such as the number of players in a ladder division. Empty: a measure of the same name, else 1."><Txt mono value={d.weight} onChange={x => setD({ weight: x || undefined })} placeholder="1" /></Row>
+      <Row label="Reference label"><Txt value={d.label} onChange={x => setD({ label: x || undefined })} placeholder={ws.datasets.find(x => x.id === d.dataset)?.name} /></Row>
+      <Row label="Reference filters"><FiltersEditor filters={d.filters || []} onChange={f => setD({ filters: f })} fields={rf} showHidden={showHidden} /></Row>
+    </>}
+  </>;
 }
 
 function CardEditor({ v, set, dataset }: { v: Visualization; set: (p: Partial<Visualization>) => void; dataset: string }) {

@@ -123,6 +123,7 @@ svg.inline { display: inline-block; width: auto; max-width: none; vertical-align
 svg.gauge { max-width: 340px; margin: 0 auto; }
 svg text { font-family: var(--mono); font-size: 11px; fill: var(--text-2); }
 svg text.lab { font-family: var(--font); fill: var(--text); }
+svg text.lab.strong { font-weight: 650; }
 svg text.big { font-family: var(--font); font-size: 30px; font-weight: 650; fill: var(--text); }
 svg .grid { stroke: var(--border); } svg .ref { stroke: var(--text); stroke-width: 1.5; stroke-dasharray: 4 3; }
 svg .tick { stroke: var(--text); stroke-width: 2; } svg .zero { stroke: var(--text-3); } svg .solid { stroke: var(--text); stroke-width: 1.5; } svg .half { stroke: var(--text-3); stroke-dasharray: 2 3; }

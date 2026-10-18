@@ -3,3 +3,4 @@ dist/
 test/out/
 test/shots/
 __pycache__/
+test/out*/
