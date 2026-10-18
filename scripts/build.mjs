@@ -21,4 +21,5 @@ const html = pages
   : body;
 writeFileSync(`${out}/index.html`, html);
 cpSync('public/data', `${out}/data`, { recursive: true });
+cpSync('public/launch', `${out}/launch`, { recursive: true });
 console.log(`index.html ${(html.length / 1024).toFixed(0)} KB`);
