@@ -9,7 +9,9 @@ const opp = (col: string, label = 'my lane opponents, same games'): Compare => (
 
 const FILES = ['my_matchups', 'my_games', 'player_games', 'roster', 'lobby_relative', 'champion_baselines', 'tier_baselines', 'met_rank_today',
   // the smurf test and the median sensitivity (data/scripts/hypothesis_test.py, smurf_median_sensitivity.py, smurf_qs_export.py); no Riot IDs
-  'smurf_tests', 'smurf_test_summary', 'smurf_sweep', 'smurf_gap_hist', 'smurf_shape', 'smurf_lobby'];
+  'smurf_tests', 'smurf_test_summary', 'smurf_sweep', 'smurf_gap_hist', 'smurf_shape', 'smurf_lobby',
+  // rank history of everyone met (data/scripts/build_rank_history.py): spells, interval milestones, daily coverage
+  'rank_history', 'rank_milestones', 'rank_coverage'];
 // Published with the app only: the NA ladder, rank snapshots of everyone met, and the user's own accounts over time.
 const BUNDLED_ONLY = ['ladder', 'rank_tracking', 'my_rank'];
 
@@ -377,6 +379,94 @@ export function lolWorkspace(): Workspace {
     V({ id: 'v_sm_gap', name: 'How far below their own lobby players sit: established vs new accounts', queryId: 'q_sm_gap', type: 'column', color: 2, width: 6, note: 'Each player in your Ranked Solo games against the median of the other nine (rank today). New accounts sit 5+ divisions below their lobby in 38% of games, established ones in 3%, and new accounts are never far above it.' }),
     V({ id: 'v_sm_shape', name: 'Could 9% hidden smurfs sit inside a symmetric distribution?', queryId: 'q_sm_shape', type: 'table', width: 6, note: 'Observed skew of the players met: -0.03, 95% range -0.10 to +0.04. inside = 1 when the shown ranks would still look like what we observed.' }),
   );
+  // ---------- rank history: every rank observation of everyone met, read back at fixed intervals ----------
+  const MILESTONE_ORDER = "decode(milestone, 'at anchor', 0, '+2 weeks', 1, '+1 month', 2, '+3 months', 3, '+6 months', 4, '+1 year', 5, 'latest', 6, 7)";
+  datasets.push(
+    {
+      id: 'rank_history', name: 'Rank history: spells', grain: 'rank spell', sequence: 'valid_from', feeds: both('rank_history', true), key: ['puuid', 'valid_from'],
+      description: 'Ranked Solo rank of every player met (and your own accounts), one row per spell: consecutive days observed with the same tier, division, LP and game count. valid_from and valid_to are the first and last day observed in that state; unobserved_days_before counts the days with no observation since the previous spell. Riot serves current rank only, so nothing here is estimated.',
+      derived: [...rankColumns('tier', 'division'), { name: 'tier_step', expr: tierStep('tier') }, { name: 'tier_name', expr: tierName('tier_step') }],
+    },
+    {
+      id: 'rank_milestones', name: 'Rank history: intervals', grain: 'player × anchor × milestone', key: ['puuid', 'anchor', 'milestone'], feeds: both('rank_milestones', true),
+      description: 'Each player\'s rank at fixed intervals after an anchor: met (the day of the first shared game) and tracked (the first day their rank was observed). Milestones: at the anchor, +2 weeks, +1 month, +3 months, +6 months, +1 year, latest. status: observed (a snapshot that day), carried (missed day, but no games were played between the observations either side, so the rank is known), nearest (closest snapshot inside the tolerance, days_off says how far), missed, pending (not due yet), before_tracking (before the first snapshot).',
+      derived: [
+        { name: 'milestone_order', expr: MILESTONE_ORDER },
+        { name: 'has_rank', expr: "if(status = 'observed' or status = 'carried' or status = 'nearest', 1, 0)" },
+        ...rankColumns('tier', 'division'), { name: 'tier_step', expr: tierStep('tier') }, { name: 'tier_name', expr: tierName('tier_step') },
+        { name: 'anchor_tier_step', expr: tierStep('anchor_tier') }, { name: 'anchor_tier_name', expr: tierName('anchor_tier_step') },
+        { name: 'climbed', expr: 'if(divisions_since_anchor >= 1, 1, 0)' }, { name: 'fell', expr: 'if(divisions_since_anchor <= -1, 1, 0)' },
+      ],
+    },
+    { id: 'rank_coverage', name: 'Rank history: coverage by day', grain: 'day', sequence: 'date', key: ['date'], feeds: both('rank_coverage', true),
+      description: 'One row per day since rank tracking began: players met by that day, and how many of them had their rank observed that day (daily snapshot, cached lookups, ladder). A missed day cannot be re-fetched later: Riot serves current rank only.' },
+  );
+  fields.push(
+    D('rank_history', 'riot_id', 'player'), D('rank_history', 'relation', 'relation (met or self)'), D('rank_history', 'valid_from', 'from (first day observed)', { type: 'time' }),
+    D('rank_history', 'valid_to', 'to (last day observed)', { type: 'time' }), D('rank_history', 'rank_label', 'rank', { sortBy: 'rank_step' }), D('rank_history', 'tier_name', 'tier', { sortBy: 'tier_step' }),
+    D('rank_history', 'source', 'rank source'),
+    F('rank_history', 'rank_score', 'rank points (Iron IV 0 = 0, 100 per division)', { agg: 'avg', format: 'integer', polarity: 'neutral' }),
+    F('rank_history', 'ladder_pct', 'ladder percentile', { agg: 'median', format: 'decimal1', polarity: 'neutral' }),
+    F('rank_history', 'points_change', 'rank points moved since the previous spell', { agg: 'sum', format: 'integer', additivity: 'additive', polarity: 'neutral' }),
+    F('rank_history', 'games_change', 'games played since the previous spell', { agg: 'sum', format: 'integer', additivity: 'additive', polarity: 'neutral' }),
+    F('rank_history', 'unobserved_days_before', 'days without an observation before this spell', { agg: 'max', format: 'integer', polarity: 'neutral' }),
+    F('rank_history', 'spells', 'spells', { expr: '1', agg: 'sum', format: 'integer', additivity: 'additive', polarity: 'neutral' }),
+    D('rank_milestones', 'riot_id', 'player'), D('rank_milestones', 'relation', 'relation (met or self)'), D('rank_milestones', 'anchor', 'anchor (met or tracked)'),
+    D('rank_milestones', 'milestone', 'milestone', { sortBy: 'milestone_order' }), D('rank_milestones', 'status', 'status'), D('rank_milestones', 'anchor_date', 'anchor date', { type: 'time' }),
+    D('rank_milestones', 'observed_date', 'observed on'), D('rank_milestones', 'rank_label', 'rank', { sortBy: 'rank_step' }), D('rank_milestones', 'tier_name', 'tier', { sortBy: 'tier_step' }),
+    D('rank_milestones', 'anchor_tier_name', 'tier at the anchor', { sortBy: 'anchor_tier_step' }), D('rank_milestones', 'anchor_status', 'how the anchor rank was found'),
+    F('rank_milestones', 'players', 'players', { expr: '1', agg: 'sum', format: 'integer', additivity: 'additive', polarity: 'neutral' }),
+    F('rank_milestones', 'has_rank', 'rank known', { agg: 'rate', format: 'percent', polarity: 'higher', description: 'Share of rows whose rank at the milestone is known: observed, carried or nearest.' }),
+    F('rank_milestones', 'ladder_pct', 'ladder percentile', { agg: 'median', format: 'decimal1', polarity: 'neutral' }),
+    F('rank_milestones', 'rank_score', 'rank points', { agg: 'median', format: 'integer', polarity: 'neutral' }),
+    F('rank_milestones', 'divisions_since_anchor', 'divisions moved since the anchor', { agg: 'median', format: 'decimal2', polarity: 'neutral', description: 'Rank points at the milestone minus at the anchor, in divisions (100 points). Blank when either rank is unknown.' }),
+    F('rank_milestones', 'games_since_anchor', 'ranked games since the anchor', { agg: 'median', format: 'integer', polarity: 'neutral' }),
+    F('rank_milestones', 'days_off', 'days between the milestone and the snapshot used', { agg: 'max', format: 'integer', polarity: 'neutral' }),
+    F('rank_milestones', 'climbed', 'climbed a division or more', { agg: 'rate', format: 'percent', polarity: 'neutral' }),
+    F('rank_milestones', 'fell', 'fell a division or more', { agg: 'rate', format: 'percent', polarity: 'neutral' }),
+    D('rank_coverage', 'date', 'day', { type: 'time' }), D('rank_coverage', 'status', 'status'),
+    F('rank_coverage', 'observed_share', 'players met with a rank observed that day', { agg: 'avg', format: 'percent', polarity: 'higher' }),
+    F('rank_coverage', 'players_observed', 'players observed', { agg: 'sum', format: 'integer', additivity: 'additive', polarity: 'higher' }),
+    F('rank_coverage', 'players_met_by_date', 'players met by then', { agg: 'max', format: 'integer', polarity: 'neutral' }),
+  );
+  const KNOWN: Filter[] = [{ field: 'status', op: 'in', value: 'observed, carried, nearest' }];
+  const TRACKED: Filter[] = [{ field: 'anchor', op: '=', value: 'tracked' }];
+  queries.push(
+    Q({ id: 'q_rh_line', name: 'One player: rank points over time', dataset: 'rank_history', last: 0, measures: m('rank_score'), groupBy: [{ field: 'valid_from', grain: 'day' }] }),
+    Q({ id: 'q_rh_profile', name: 'One player: ladder percentile, baseline to trend', dataset: 'rank_history', last: 0, measures: m('ladder_pct') }),
+    Q({ id: 'q_rh_ms', name: 'One player: rank at each interval', dataset: 'rank_milestones', last: 0, measures: [{ field: 'divisions_since_anchor', agg: 'avg' }, { field: 'days_off' }],
+      groupBy: [{ field: 'anchor' }, { field: 'milestone' }, { field: 'status' }, { field: 'rank_label' }, { field: 'observed_date' }], sort: 'key_asc' }),
+    Q({ id: 'q_rh_spells', name: 'One player: every rank spell observed', dataset: 'rank_history', last: 0, measures: [{ field: 'points_change' }, { field: 'games_change' }, { field: 'unobserved_days_before' }],
+      groupBy: [{ field: 'valid_from', grain: 'day' }, { field: 'rank_label' }, { field: 'source' }], sort: 'key_asc' }),
+    Q({ id: 'q_rh_pop', name: 'Players met: rank at each interval after tracking began', dataset: 'rank_milestones', last: 0, followDashboard: true, filters: [...TRACKED, ...KNOWN],
+      measures: [{ field: 'players' }, { field: 'ladder_pct', agg: 'p25', label: 'lower quartile' }, { field: 'ladder_pct', label: 'median' }, { field: 'ladder_pct', agg: 'p75', label: 'upper quartile' }, { field: 'divisions_since_anchor' }, { field: 'climbed' }, { field: 'fell' }],
+      groupBy: [{ field: 'milestone' }], sort: 'key_asc' }),
+    Q({ id: 'q_rh_pop_met', name: 'Players met: rank at each interval after the day met', dataset: 'rank_milestones', last: 0, filters: [{ field: 'anchor', op: '=', value: 'met' }, ...KNOWN],
+      measures: [{ field: 'players' }, { field: 'ladder_pct', label: 'median ladder percentile' }, { field: 'divisions_since_anchor' }, { field: 'climbed' }, { field: 'fell' }],
+      groupBy: [{ field: 'milestone' }], sort: 'key_asc' }),
+    Q({ id: 'q_rh_moved', name: 'Players met: divisions moved since first observed', dataset: 'rank_milestones', last: 0, measures: m('divisions_since_anchor'),
+      filters: [...TRACKED, { field: 'milestone', op: '=', value: 'latest' }, { field: 'divisions_since_anchor', op: 'not_null', value: '' }] }),
+    Q({ id: 'q_rh_flow', name: 'Players met: tier when first observed → tier now', dataset: 'rank_milestones', last: 0, measures: m('players'), groupBy: [{ field: 'anchor_tier_name' }, { field: 'tier_name' }],
+      filters: [...TRACKED, { field: 'milestone', op: '=', value: 'latest' }, { field: 'anchor_tier_name', op: 'not_null', value: '' }, { field: 'tier_name', op: 'not_null', value: '' }] }),
+    Q({ id: 'q_rh_status', name: 'Rank history: how each interval was filled', dataset: 'rank_milestones', last: 0, measures: m('players'), groupBy: [{ field: 'milestone' }, { field: 'status' }], filters: [{ field: 'anchor', op: '=', value: 'met' }] }),
+    Q({ id: 'q_rh_cov', name: 'Rank history: players met with a rank observed, by day', dataset: 'rank_coverage', last: 0, measures: m('observed_share'), groupBy: [{ field: 'date', grain: 'day' }] }),
+    Q({ id: 'q_rh_cov_t', name: 'Rank history: coverage by day', dataset: 'rank_coverage', last: 0, measures: [{ field: 'players_met_by_date' }, { field: 'players_observed' }, { field: 'observed_share' }], groupBy: [{ field: 'date', grain: 'day' }, { field: 'status' }], sort: 'key_asc' }),
+  );
+  vizs.push(
+    V({ id: 'v_rh_line', name: 'Rank over time', queryId: 'q_rh_line', type: 'line', color: 3, width: 4, window: 1, note: 'Rank points per observed spell (100 = one division; Gold IV = 1200, Plat IV = 1600). Pick the player with the dashboard filter on player.' }),
+    V({ id: 'v_rh_profile', name: 'Ladder percentile: baseline, consistency, peak, trend', queryId: 'q_rh_profile', type: 'profile', color: 3, width: 2, window: 3, per: 10, note: 'Over the player\'s observed spells; trend = change per 10 spells.' }),
+    V({ id: 'v_rh_ms', name: 'Rank at each interval: on the day met, then +2 weeks to +1 year', queryId: 'q_rh_ms', type: 'table', width: 6, note: 'met = the day of the first shared game; tracked = the first day the rank was observed. carried = a missed day recovered exactly (no games either side); nearest = closest snapshot, days off shown; before_tracking = before the first snapshot, never recoverable.' }),
+    V({ id: 'v_rh_spells', name: 'Every rank spell observed', queryId: 'q_rh_spells', type: 'table', width: 6 }),
+    V({ id: 'v_rh_pop', name: 'Players met: ladder percentile at each interval', queryId: 'q_rh_pop', type: 'table', width: 6, note: 'Anchor = the first day each player\'s rank was observed. Only rows with a known rank. Players reach later milestones as days pass, so later rows hold fewer players until the history fills in.' }),
+    V({ id: 'v_rh_pop_met', name: 'Players met: rank at each interval after the day met', queryId: 'q_rh_pop_met', type: 'table', width: 3, note: 'Anchor = the day of the first shared game. Each row holds the players whose interval date fell after tracking began, so rows are different players. Movement since the day met needs their rank on that day, which exists only for players met since tracking began.' }),
+    V({ id: 'v_rh_moved', name: 'Divisions moved since first observed', queryId: 'q_rh_moved', type: 'hist', color: 4, width: 3, note: 'Latest rank minus the first observed rank, per player met. Zero = same division.' }),
+    V({ id: 'v_rh_flow', name: 'Where the players met went: tier first observed → tier now', queryId: 'q_rh_flow', type: 'flow', color: 1, width: 6 }),
+    V({ id: 'v_rh_status', name: 'How each interval was filled (anchor: day met)', queryId: 'q_rh_status', type: 'heatmap', width: 3, note: 'Counts of players by milestone and status. missed = a day the snapshot did not run; it can never be fetched later.' }),
+    V({ id: 'v_rh_cov', name: 'Snapshot coverage by day', queryId: 'q_rh_cov', type: 'column', color: 2, width: 3, note: 'Share of everyone met by that day whose rank was observed that day. Gaps are days the snapshot did not run.' }),
+    V({ id: 'v_rh_cov_t', name: 'Snapshot coverage by day (table)', queryId: 'q_rh_cov_t', type: 'table', width: 6 }),
+    V({ id: 'v_met_hidden', name: 'Who I play, if some of them are smurfs', queryId: 'q_met_dist', type: 'distribution', color: 5, width: 6, dist: { dataset: 'ladder', label: 'the NA ladder' }, hidden: { share: 9, label: 'smurfs' },
+      note: 'Drag the share: it is computed live from whatever players are in the query, so it works for any account or any dataset with a rank distribution. The median cannot fall; at most it rises to the (50 + share)th percentile of the players met.' }),
+  );
   const T = (ids: string[]): Dashboard['tiles'] => ids.map((vizId, i) => ({ id: `t_${vizId}_${i}`, vizId }));
   const dashboards: Dashboard[] = [
     { id: 'd_lens', name: 'Lobby lens (no rank)', filters: [], tiles: T(['v_card', 'v_solo', 'v_vision', 'v_rel', 'v_jg']) },
@@ -386,7 +476,9 @@ export function lolWorkspace(): Workspace {
     { id: 'd_matchups', name: 'Champions & matchups', filters: [], tiles: T(['v_champ_wr', 'v_gp', 'v_kda_champ', 'v_heat']) },
     { id: 'd_met_rank', name: 'Who I play: rank distribution', description: 'The rank of everyone you have played with or against, against the whole ladder.', filters: [], tiles: T(['v_met_dist', 'v_met_dist_enemy', 'v_met_dist_ally', 'v_met_pct_hist', 'v_met_side']) },
     { id: 'd_smurf_test', name: 'Smurf test: both hypotheses', description: 'Every investigated player tested both ways: assume they play at their shown rank, and assume they are a smurf.', filters: [], tiles: T(['v_st_summary', 'v_st_weight', 'v_st_evidence']) },
-    { id: 'd_smurf_median', name: 'Smurfs and the median', description: 'How hidden smurfs below the median would move the median and shape of the ranks of the players you meet.', filters: [], tiles: T(['v_sm_sweep', 'v_sm_table', 'v_sm_lobby', 'v_sm_gap', 'v_sm_shape']) },
+    { id: 'd_smurf_median', name: 'Smurfs and the median', description: 'How hidden smurfs below the median would move the median and shape of the ranks of the players you meet.', filters: [], tiles: T(['v_met_hidden', 'v_sm_sweep', 'v_sm_table', 'v_sm_lobby', 'v_sm_gap', 'v_sm_shape']) },
+    { id: 'd_rank_player', name: 'Rank history: one player', description: 'Current and past rank of one player (pick them with the player filter), at fixed intervals after you met them.', filters: [{ field: 'riot_id', op: '=', value: 'takinturrets#NA1' }], tiles: T(['v_rh_line', 'v_rh_profile', 'v_rh_ms', 'v_rh_spells']) },
+    { id: 'd_rank_population', name: 'Rank history: everyone met', description: 'Where the players you met were when you met them and where they are now, at fixed intervals, with the days the snapshot missed.', filters: [], tiles: T(['v_rh_pop', 'v_rh_flow', 'v_rh_moved', 'v_rh_pop_met', 'v_rh_cov', 'v_rh_status', 'v_rh_cov_t']) },
     { id: 'd_tracking', name: 'Rank tracking', description: 'Rank snapshots over time: the players you met, and your own accounts.', filters: [], tiles: T(['v_flow_tier', 'v_flow_div', 'v_track_by_date', 'v_track_change', 'v_track_moved', 'v_my_rank_profile', 'v_my_rank_ribbon']) },
   ];
   return {
@@ -399,6 +491,7 @@ export function lolWorkspace(): Workspace {
       'Player profile: lobby_level = where the other nine players sit on the ladder (0-100 percentile, rank as of the pull). Baseline, consistency, peak and trend of any measure = viz type profile (one card per measure, no groupBy, last 0); a rolling baseline with its spread = viz type ribbon. Use agg median for per-game stats when the user asks for baseline or consistency; p25, p75 and iqr are available. roster.ladder_pct = each player met, ladder percentile today.',
       'Rank distribution: met_players = one row per player met with their rank today (rank_label in ladder order via rank_step, ladder_pct 0-100, side = ally / enemy / both). ladder = the NA solo-queue ladder, one row per division with players = accounts. "Rank of the players I play", "vs the ladder" → query met_players, measures [players], groupBy rank_label, filter rank_label not_null, last 0, visualization distribution with reference ladder. rank_tracking = one row per player met per rank snapshot (ladder_change, divisions_moved, moved_up compare with that player\'s previous snapshot). Rank flow = viz type flow on rank_tracking grouped by [prev_tier_name, tier_name] (or [prev_rank_label, rank_label] for divisions), measure players. my_rank = the user\'s own accounts over time (ladder_pct); baseline, consistency, peak and trend of the user\'s rank = profile on my_rank filtered to one account_name.',
       'Smurf test: smurf_tests = one row per evidence item per investigated player (case_name, evidence, log10_lr + = smurf, p_value_if_not_smurf, p_value_if_smurf); smurf_test_summary = one row per player (p_if_not_smurf, p_if_smurf, bayes_factor, posterior_smurf). smurf_sweep = median of the players met when a share (smurf_share_pct) of players below the median are smurfs, by scenario (headline = 1 for the four main ones). smurf_gap_hist = rank vs own lobby by season games group. smurf_shape = skew of shown ranks with hidden smurfs.',
+      'Rank history: rank_history = one row per player per rank spell (valid_from, rank_score, ladder_pct, points_change since the previous spell). rank_milestones = rank at fixed intervals after an anchor: anchor = met (day of the first shared game) or tracked (first day observed); milestone = at anchor, +2 weeks, +1 month, +3 months, +6 months, +1 year, latest; status = observed / carried / nearest / missed / pending / before_tracking; only observed, carried and nearest have a rank. divisions_since_anchor = movement since the anchor. rank_coverage = per day, share of players met whose rank was observed. One player → dashboard filter riot_id. A distribution viz with hidden {share, label} shows how far the median can move if that share are smurfs.',
       'game_weight = the user\'s highlight weight per game (1 when unset); highlighted = 1 for games weighted above 1. "Showcase", "highlight", "my best games" → weight game_weight or filter highlighted = 1. Weighting schemes are fields with role weight (w_learning_curve, w_main_role, w_support_half, w_duration, w_highlights); set query.weight to a weight field id or to an expression such as if(position = \'UTILITY\', 0.5, 1) or if(champion = \'Riven\' and champ_game_no > 150, 2, 1). champ_game_no = the Nth game on that champion in this history; champ_experience buckets it; hard_champion = 1 for mechanically hard champions. Time-weighted CS/min = field cs_per_min_tw (ratio of total CS to total minutes). enemy_jg_ganks_pre15 exists only for the user\'s own games.',
     ].join('\n'),
     suggestions: [
@@ -412,11 +505,13 @@ export function lolWorkspace(): Workspace {
       { text: 'Rank of everyone I have played with or against', vizId: 'v_met_hist' },
       { text: 'Which account gets the hardest lobbies?', vizId: 'v_lobby_acct' },
       { text: 'Is this player a smurf? Test both hypotheses', vizId: 'v_st_summary' },
-      { text: 'If smurfs were shown at their true rank, how far would my median move?', vizId: 'v_sm_sweep' },
+      { text: 'If smurfs were shown at their true rank, how far would my median move?', vizId: 'v_met_hidden' },
+      { text: 'Where are the players I met now, compared with when I met them?', vizId: 'v_rh_pop' },
+      { text: 'What was this player\'s rank when I met them, and since?', vizId: 'v_rh_ms' },
       { text: 'Is my CS per min more consistent on Gangplank than on my other champions?' },
       { text: 'My peak 20-game stretch for solo kills, and when it was' },
       { text: 'Are my solo kills rising while my lobby level stays flat?' },
     ],
-    sources, items, datasets, fields, queries, visualizations: vizs, dashboards, activeDashboard: 'd_lens', seedVersion: 4,
+    sources, items, datasets, fields, queries, visualizations: vizs, dashboards, activeDashboard: 'd_lens', seedVersion: 5,
   };
 }

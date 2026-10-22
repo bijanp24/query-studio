@@ -1,0 +1,13 @@
+date,players_met_by_date,players_observed,observed_share,daily_snapshot,league_cache,ladder,status
+2026-10-11,9675,8852,0.9149,0,1666,7186,cache or ladder only
+2026-10-12,9702,805,0.083,0,805,0,cache or ladder only
+2026-10-13,9780,0,0.0,0,0,0,missed
+2026-10-14,9833,78,0.0079,0,78,0,cache or ladder only
+2026-10-15,9886,106,0.0107,0,106,0,cache or ladder only
+2026-10-16,9886,0,0.0,0,0,0,missed
+2026-10-17,9922,0,0.0,0,0,0,missed
+2026-10-18,9967,9967,1.0,3030,6937,0,partial snapshot
+2026-10-19,9967,9967,1.0,9967,0,0,full snapshot
+2026-10-20,10021,0,0.0,0,0,0,missed
+2026-10-21,10048,0,0.0,0,0,0,missed
+2026-10-22,10057,684,0.068,600,84,0,in progress
