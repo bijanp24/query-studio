@@ -221,7 +221,7 @@ export interface Query {
 
 export type VizType =
   | 'kpi' | 'gauge' | 'bar' | 'column' | 'line' | 'area' | 'hist' | 'scatter'
-  | 'heatmap' | 'table' | 'sparktable' | 'trend' | 'card' | 'profile' | 'ribbon' | 'distribution' | 'flow';
+  | 'heatmap' | 'table' | 'sparktable' | 'trend' | 'card' | 'profile' | 'ribbon' | 'distribution' | 'flow' | 'sampling';
 
 /**
  * The population a distribution is drawn against. Its rows are binned by the query's group-by field
@@ -230,6 +230,31 @@ export type VizType =
  * field of the same id on the reference dataset is used, else every row counts once.
  */
 export interface DistReference { dataset: string; weight?: string; filters?: Filter[]; label?: string }
+
+/** One number read from a dataset: expr over the last (or first) row that matches the filters. */
+export interface ValueRef { dataset: string; expr: string; filters?: Filter[]; pick?: 'first' | 'last' }
+
+/**
+ * A null population a sample is tested against (see core/sampling.ts). population = random members
+ * of the reference; matched = members near a center (its median), with a spread in bins. Center and
+ * spread are numbers in bins (0 = bottom of the first bin), read from a dataset, or 'fit' to the sample.
+ */
+export interface SamplingNull { label: string; kind: 'population' | 'matched'; center?: number | 'fit' | ValueRef; spread?: number | 'fit' }
+
+export interface SamplingSettings {
+  nulls?: SamplingNull[];
+  sims?: number;
+  /** Draws come in clusters (players met in the same game): samples are drawn at n / designEffect. */
+  designEffect?: number;
+  designNote?: string;
+  /** Extra sample sizes whose median range is shown under the first null (one lobby of 10, 100, ...). */
+  sizes?: number[];
+  /** Positions marked on the median chart (a smurf-adjusted median, your own rank). */
+  markers?: { label: string; at?: number | ValueRef }[];
+  /** What one bin is called ("division"), and how a position inside a bin reads (100 → "LP"). */
+  binName?: string;
+  within?: { scale: number; unit: string };
+}
 
 export interface CardColumn {
   label: string;
@@ -259,8 +284,10 @@ export interface Visualization {
   card?: { rows: CardRow[]; columns: CardColumn[] };
   /** profile: trend reported per this many rows (default 100). */
   per?: number;
-  /** distribution: the reference population. */
+  /** distribution and sampling: the reference population. */
   dist?: DistReference;
+  /** sampling: the null populations and how to draw from them. */
+  sampling?: SamplingSettings;
 }
 
 export interface Tile { id: string; vizId: string; width?: 2 | 3 | 4 | 6 }

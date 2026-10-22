@@ -1,6 +1,6 @@
 // The League of Legends workspace: the Riot pipeline's processed layer as sources, configured
 // entirely through the generic model (no League-specific code anywhere in the engine).
-import type { Compare, Dashboard, Field, Filter, Query, Source, SourceItem, Visualization, Workspace, Dataset } from '../core/types';
+import type { Compare, Dashboard, Field, Filter, Query, SamplingSettings, Source, SourceItem, ValueRef, Visualization, Workspace, Dataset } from '../core/types';
 
 const RS: Filter[] = [{ field: 'queue', op: '=', value: 'Ranked Solo' }];
 const LOBBY_ROLE: Compare = { kind: 'reference', dataset: 'lobby_players', filters: [{ field: 'queue_name', op: '=', value: 'Ranked Solo' }], weightBy: ['position'], label: 'lobby players, same role' };
@@ -377,6 +377,35 @@ export function lolWorkspace(): Workspace {
     V({ id: 'v_sm_gap', name: 'How far below their own lobby players sit: established vs new accounts', queryId: 'q_sm_gap', type: 'column', color: 2, width: 6, note: 'Each player in your Ranked Solo games against the median of the other nine (rank today). New accounts sit 5+ divisions below their lobby in 38% of games, established ones in 3%, and new accounts are never far above it.' }),
     V({ id: 'v_sm_shape', name: 'Could 9% hidden smurfs sit inside a symmetric distribution?', queryId: 'q_sm_shape', type: 'table', width: 6, note: 'Observed skew of the players met: -0.03, 95% range -0.10 to +0.04. inside = 1 when the shown ranks would still look like what we observed.' }),
   );
+  // Sample vs population: the players met tested against realistic samples of the ladder.
+  // Positions are in divisions above Iron IV (rank_step), so rank points / 100 land on the same scale.
+  const RANKED: Filter[] = [{ field: 'rank_label', op: 'not_null', value: '' }];
+  const ownRank = (account: string): ValueRef => ({ dataset: 'my_rank', expr: 'rank_step + coalesce(lp, 0) / 100', filters: [{ field: 'account_name', op: '=', value: account }, { field: 'rank_step', op: 'not_null', value: '' }] });
+  const smurfMedian = (scenario: string): ValueRef => ({ dataset: 'smurf_sweep', expr: 'median_points / 100', filters: [{ field: 'smurf_share_pct', op: '=', value: '9' }, { field: 'scenario', op: 'contains', value: scenario }] });
+  const RANDOM = { label: 'random NA players', kind: 'population' as const };
+  const FITTED = { label: 'rank-matched, fitted to yours', kind: 'matched' as const, center: 'fit' as const, spread: 'fit' as const };
+  const SP: SamplingSettings = {
+    sims: 1000, designEffect: 5, binName: 'division', within: { scale: 100, unit: 'LP' },
+    designNote: 'players met in the same game share its lobby: 56% of the rank variance is between games, about 8 others per game, so 1 + 7 × 0.56 ≈ 5',
+  };
+  queries.push(
+    Q({ id: 'q_sp_main', name: 'Players met on takinturrets, by rank today', dataset: 'met_players', last: 0, measures: m('players'), groupBy: [{ field: 'rank_label' }], filters: [...RANKED, { field: 'seen_on', op: '=', value: 'takinturrets' }] }),
+    Q({ id: 'q_sp_alt', name: 'Players met on asd123456efg, by rank today', dataset: 'met_players', last: 0, measures: m('players'), groupBy: [{ field: 'rank_label' }], filters: [...RANKED, { field: 'seen_on', op: '=', value: 'asd123456efg' }] }),
+  );
+  vizs.push(
+    V({ id: 'v_sp_all', name: 'Is who I play a realistic sample of the ladder?', queryId: 'q_met_dist', type: 'sampling', color: 5, width: 6, dist: { dataset: 'ladder', label: 'the NA ladder' },
+      sampling: { ...SP, nulls: [RANDOM, FITTED], sizes: [10, 100, 1000],
+        markers: [{ label: 'smurf-adjusted (9%, B)', at: smurfMedian('B.') }, { label: 'upper bound (9%)', at: smurfMedian('Upper bound') }] },
+      note: 'Everyone met on all accounts, by rank today. Random NA players: what a simple random sample of the ladder of this size looks like. Nobody should look like that, because matchmaking picks players near your rating. Rank-matched, fitted: the ladder near a center, with the center and spread chosen to match your median and middle half, so only the mean, skew, quartiles and shape test anything. The grey rows show how wide one lobby (10), 100 and 1,000 random players are. Dashed lines: the median if 9% of the players below it are smurfs shown at their true rank.' }),
+    V({ id: 'v_sp_main', name: 'Main account: realistic lobbies for my shown rank?', queryId: 'q_sp_main', type: 'sampling', color: 1, width: 6, dist: { dataset: 'ladder', label: 'the NA ladder' },
+      sampling: { ...SP, nulls: [RANDOM, { label: 'centered on my rank (takinturrets)', kind: 'matched', center: ownRank('takinturrets'), spread: 'fit' }, FITTED],
+        markers: [{ label: 'my rank', at: ownRank('takinturrets') }] },
+      note: 'Players met on takinturrets. Centered on my rank: the lobbies a player at this account\'s latest snapshot rank would meet, with the spread fitted to yours. If the median is off, these lobbies were built around a higher (or lower) rating than the rank shown today, which is what matchmaking on hidden MMR would do; it does not by itself say why. The fitted spread is wider than one lobby (about 3 divisions) because two years of games moved the lobby center.' }),
+    V({ id: 'v_sp_alt', name: 'Alt account: realistic lobbies for my shown rank?', queryId: 'q_sp_alt', type: 'sampling', color: 2, width: 6, dist: { dataset: 'ladder', label: 'the NA ladder' },
+      sampling: { ...SP, nulls: [RANDOM, { label: 'centered on my rank (asd123456efg)', kind: 'matched', center: ownRank('asd123456efg'), spread: 'fit' }, FITTED],
+        markers: [{ label: 'my rank', at: ownRank('asd123456efg') }] },
+      note: 'Players met on asd123456efg, against the lobbies a player at this account\'s latest snapshot rank would meet.' }),
+  );
   const T = (ids: string[]): Dashboard['tiles'] => ids.map((vizId, i) => ({ id: `t_${vizId}_${i}`, vizId }));
   const dashboards: Dashboard[] = [
     { id: 'd_lens', name: 'Lobby lens (no rank)', filters: [], tiles: T(['v_card', 'v_solo', 'v_vision', 'v_rel', 'v_jg']) },
@@ -387,6 +416,7 @@ export function lolWorkspace(): Workspace {
     { id: 'd_met_rank', name: 'Who I play: rank distribution', description: 'The rank of everyone you have played with or against, against the whole ladder.', filters: [], tiles: T(['v_met_dist', 'v_met_dist_enemy', 'v_met_dist_ally', 'v_met_pct_hist', 'v_met_side']) },
     { id: 'd_smurf_test', name: 'Smurf test: both hypotheses', description: 'Every investigated player tested both ways: assume they play at their shown rank, and assume they are a smurf.', filters: [], tiles: T(['v_st_summary', 'v_st_weight', 'v_st_evidence']) },
     { id: 'd_smurf_median', name: 'Smurfs and the median', description: 'How hidden smurfs below the median would move the median and shape of the ranks of the players you meet.', filters: [], tiles: T(['v_sm_sweep', 'v_sm_table', 'v_sm_lobby', 'v_sm_gap', 'v_sm_shape']) },
+    { id: 'd_sample_pop', name: 'Sample vs population', description: 'Your lobbies are a sample of the ladder, never the ladder itself. Is the sample you met one a realistic draw would give: a random one, one matched to your rank, or neither?', filters: [], tiles: T(['v_sp_all', 'v_sp_main', 'v_sp_alt']) },
     { id: 'd_tracking', name: 'Rank tracking', description: 'Rank snapshots over time: the players you met, and your own accounts.', filters: [], tiles: T(['v_flow_tier', 'v_flow_div', 'v_track_by_date', 'v_track_change', 'v_track_moved', 'v_my_rank_profile', 'v_my_rank_ribbon']) },
   ];
   return {
@@ -398,6 +428,7 @@ export function lolWorkspace(): Workspace {
       'Default comparison for "vs my lobbies / lobby players" is reference dataset lobby_players filtered queue_name = Ranked Solo, weightBy position. "vs my lane opponents" is paired with the opp_ column. Rank and tier fields are hidden; do not build on them unless asked.',
       'Player profile: lobby_level = where the other nine players sit on the ladder (0-100 percentile, rank as of the pull). Baseline, consistency, peak and trend of any measure = viz type profile (one card per measure, no groupBy, last 0); a rolling baseline with its spread = viz type ribbon. Use agg median for per-game stats when the user asks for baseline or consistency; p25, p75 and iqr are available. roster.ladder_pct = each player met, ladder percentile today.',
       'Rank distribution: met_players = one row per player met with their rank today (rank_label in ladder order via rank_step, ladder_pct 0-100, side = ally / enemy / both). ladder = the NA solo-queue ladder, one row per division with players = accounts. "Rank of the players I play", "vs the ladder" → query met_players, measures [players], groupBy rank_label, filter rank_label not_null, last 0, visualization distribution with reference ladder. rank_tracking = one row per player met per rank snapshot (ladder_change, divisions_moved, moved_up compare with that player\'s previous snapshot). Rank flow = viz type flow on rank_tracking grouped by [prev_tier_name, tier_name] (or [prev_rank_label, rank_label] for divisions), measure players. my_rank = the user\'s own accounts over time (ladder_pct); baseline, consistency, peak and trend of the user\'s rank = profile on my_rank filtered to one account_name.',
+      'Sample vs population: viz type sampling on met_players grouped by rank_label (filter rank_label not_null, last 0) with dist reference ladder tests the players met against simulated samples of the ladder: sampling.nulls population (random players) and matched (near a center: a number in divisions above Iron IV, a value read from a dataset such as my_rank rank_step + lp / 100, or fit; spread in divisions or fit). designEffect 5 accounts for players met in the same game.',
       'Smurf test: smurf_tests = one row per evidence item per investigated player (case_name, evidence, log10_lr + = smurf, p_value_if_not_smurf, p_value_if_smurf); smurf_test_summary = one row per player (p_if_not_smurf, p_if_smurf, bayes_factor, posterior_smurf). smurf_sweep = median of the players met when a share (smurf_share_pct) of players below the median are smurfs, by scenario (headline = 1 for the four main ones). smurf_gap_hist = rank vs own lobby by season games group. smurf_shape = skew of shown ranks with hidden smurfs.',
       'game_weight = the user\'s highlight weight per game (1 when unset); highlighted = 1 for games weighted above 1. "Showcase", "highlight", "my best games" → weight game_weight or filter highlighted = 1. Weighting schemes are fields with role weight (w_learning_curve, w_main_role, w_support_half, w_duration, w_highlights); set query.weight to a weight field id or to an expression such as if(position = \'UTILITY\', 0.5, 1) or if(champion = \'Riven\' and champ_game_no > 150, 2, 1). champ_game_no = the Nth game on that champion in this history; champ_experience buckets it; hard_champion = 1 for mechanically hard champions. Time-weighted CS/min = field cs_per_min_tw (ratio of total CS to total minutes). enemy_jg_ganks_pre15 exists only for the user\'s own games.',
     ].join('\n'),
@@ -412,11 +443,12 @@ export function lolWorkspace(): Workspace {
       { text: 'Rank of everyone I have played with or against', vizId: 'v_met_hist' },
       { text: 'Which account gets the hardest lobbies?', vizId: 'v_lobby_acct' },
       { text: 'Is this player a smurf? Test both hypotheses', vizId: 'v_st_summary' },
+      { text: 'Is who I play a realistic sample of the ladder?', vizId: 'v_sp_all' },
       { text: 'If smurfs were shown at their true rank, how far would my median move?', vizId: 'v_sm_sweep' },
       { text: 'Is my CS per min more consistent on Gangplank than on my other champions?' },
       { text: 'My peak 20-game stretch for solo kills, and when it was' },
       { text: 'Are my solo kills rising while my lobby level stays flat?' },
     ],
-    sources, items, datasets, fields, queries, visualizations: vizs, dashboards, activeDashboard: 'd_lens', seedVersion: 4,
+    sources, items, datasets, fields, queries, visualizations: vizs, dashboards, activeDashboard: 'd_lens', seedVersion: 5,
   };
 }
