@@ -2,7 +2,7 @@
 // visualization's settings and (for the comparison card) the catalog, so any query can feed any
 // visualization; a shape that does not fit says so instead of guessing.
 import React from 'react';
-import type { Row, Value, Visualization } from '../../core/types';
+import type { Row, Value, ValueRef, Visualization } from '../../core/types';
 import { fmt, matchFilters, measureFn, pointsOf, reference, seriesOf, WEEKDAY_ORDER, type Catalog, type Group, type Result } from '../../core/engine';
 import { fieldExpr, fieldsFor, missingColumns, resolveMeasure, type ResolvedMeasure } from '../../core/semantic';
 import { ols, welch, mean, quantile } from '../../core/stats';
@@ -10,6 +10,7 @@ import { compile, evaluate, toNum } from '../../core/expr';
 import { distribution, hiddenRange, ordinal, type BinCount, type DistSummary } from '../../core/distribution';
 import { flowOf, type FlowSummary } from '../../core/flow';
 import { profileOf, type Profile } from '../../core/profile';
+import { medianRange, sampleTest, statsOf, type NullResult, type Stat, type StatTest } from '../../core/sampling';
 
 export const PALETTE = 8;
 // Charts draw at the width they get, so text stays the same size on a phone and a full-width tile.
@@ -371,6 +372,133 @@ function Distribution({ v, res, cat }: { v: Visualization; res: Result; cat: Cat
   </>;
 }
 
+// ---------- a sample against realistic samples of a population ----------
+/** A number read from a dataset: the expression over the last (or first) row matching the filters. */
+function valueOf(ref: ValueRef, cat: Catalog): number | null {
+  const t = cat.tables[ref.dataset]; if (!t) return null;
+  const fields = fieldsFor(cat.ws, ref.dataset, t);
+  const exprOf = (name: string) => compile(fieldExpr(name, fields));
+  const rows = t.rows.filter(r => !ref.filters?.length || matchFilters(r, ref.filters, exprOf));
+  const r = ref.pick === 'first' ? rows[0] : rows[rows.length - 1];
+  if (!r) return null;
+  try { return toNum(evaluate(compile(ref.expr), r)); } catch { return null; }
+}
+const numOf = (x: number | ValueRef | undefined, cat: Catalog) => x == null ? undefined : typeof x === 'number' ? x : valueOf(x, cat) ?? undefined;
+
+const STAT_ROWS: { s: Stat; label: string; kind: 'pos' | 'width' | 'num' | 'pct' }[] = [
+  { s: 'median', label: 'Median', kind: 'pos' }, { s: 'p25', label: '25th percentile', kind: 'pos' }, { s: 'p75', label: '75th percentile', kind: 'pos' },
+  { s: 'iqr', label: 'Middle half (IQR)', kind: 'width' }, { s: 'mean', label: 'Mean', kind: 'pos' }, { s: 'skew', label: 'Skew', kind: 'num' },
+  { s: 'shape', label: 'Shape distance', kind: 'pct' },
+];
+
+function Sampling({ v, res, cat }: { v: Visualization; res: Result; cat: Catalog }) {
+  const { d, label, msg } = distOf(v, res, cat);
+  const cfg = v.sampling || {};
+  const deff = cfg.designEffect && cfg.designEffect > 1 ? cfg.designEffect : 1;
+  const [clustered, setClustered] = React.useState(true);
+  const W = useW();
+  const sample = d ? d.bins.map(b => b.n) : [], pop = d ? d.bins.map(b => b.ref) : [];
+  const specs = cfg.nulls?.length ? cfg.nulls : [{ label: `random members of ${label}`, kind: 'population' as const }];
+  // A center read from a dataset that has not loaded leaves that null out rather than quietly fitting it.
+  const unresolved = specs.filter(nl => nl.center != null && typeof nl.center === 'object' && numOf(nl.center, cat) == null).map(nl => nl.label);
+  const nulls = specs.filter(nl => !unresolved.includes(nl.label))
+    .map(nl => ({ ...nl, center: nl.center === 'fit' ? 'fit' as const : numOf(nl.center, cat), spread: nl.spread === 'fit' ? 'fit' as const : numOf(nl.spread, cat) }));
+  const markers = (cfg.markers || []).map(m => ({ label: m.label, at: numOf(m.at, cat) })).filter((m): m is { label: string; at: number } => m.at != null && Number.isFinite(m.at));
+  const useDeff = clustered ? deff : 1;
+  const key = JSON.stringify([sample, pop, nulls, cfg.sims, useDeff, cfg.sizes]);
+  const out = React.useMemo(() => {
+    if (!d || !d.refTotal) return null;
+    const tests = nulls.map(nl => ({ nl, r: sampleTest(sample, pop, { kind: nl.kind, center: nl.center, spread: nl.spread }, { sims: cfg.sims, designEffect: useDeff }) }));
+    const first = tests[0]?.r;
+    const sizes = first ? (cfg.sizes || []).map(n => ({ n, ...medianRange(first.shares, n) })) : [];
+    return { tests, sizes };
+  }, [key]);
+  if (!d) return <Empty msg={msg || 'No rows match this query.'} />;
+  if (!d.refTotal || !out) return <Empty msg={msg || 'A sample test needs a reference population: pick one under "Compare with".'} />;
+  const bins = d.bins, B = bins.length, g = res.grain, unit = cfg.binName || 'bin';
+  const obs = statsOf(sample);
+  const pos = (x: number) => {
+    let i = Math.max(0, Math.min(B - 1, Math.floor(x))), f = Math.max(0, x - i);
+    if (!cfg.within) return `${bins[i].key}${f > 0.05 && f < 0.95 ? ` (${Math.round(f * 100)}% in)` : ''}`;
+    let w = Math.round(f * cfg.within.scale);
+    if (w >= cfg.within.scale && i < B - 1) { i++; w = 0; }
+    return `${bins[i].key} ${w} ${cfg.within.unit}`;
+  };
+  const width = (x: number) => `${x.toFixed(1)} ${unit}s`;
+  const fmtStat = (k: typeof STAT_ROWS[number]['kind'], x: number) => k === 'pos' ? pos(x) : k === 'width' ? width(x) : k === 'pct' ? (x * 100).toFixed(1) + '%' : (x >= 0 ? '+' : '') + x.toFixed(2);
+  const pText = (t: StatTest, sims: number) => t.fitted ? 'fitted' : t.p <= 1.5 / (sims + 1) ? `< ${(1 / (sims + 1)).toFixed(3)}` : t.p.toFixed(t.p < 0.01 ? 3 : 2);
+  const valid = out.tests.filter((t): t is { nl: typeof nulls[number]; r: NullResult } => !!t.r);
+  const band = valid.find(t => t.nl.kind === 'matched') || valid[0];
+  const nTxt = (n: number) => n.toLocaleString();
+  // Shape: bars = the sample, outline = the population, shaded = where 95% of realistic samples' shares fall.
+  const H = 230, pl = 40, pr = 8, pt = 12, pb = 56, bw = (W - pl - pr) / B;
+  const hi = (Math.max(...bins.map((b, i) => Math.max(b.share, b.refShare, band?.r.bandHi[i] ?? 0))) || 1) * 1.08;
+  const Y = (x: number) => pt + (1 - x / hi) * (H - pt - pb), X = (i: number) => pl + i * bw, rot = B > 8;
+  // Medians: each null's 95% range of sample medians on the same axis as the observed median and the markers.
+  const strip = [
+    ...valid.map(t => ({ label: `${t.nl.label} · n = ${nTxt(t.r.n)}`, lo: t.r.tests.median.lo, mid: t.r.tests.median.mid, hi: t.r.tests.median.hi, c: t.nl.kind === 'population' ? 'var(--text-2)' : color(v.color, 1) })),
+    ...out.sizes.map(s => ({ label: `${valid[0]?.nl.label} · n = ${nTxt(s.n)}`, lo: s.lo, mid: s.mid, hi: s.hi, c: 'var(--border-2)' })),
+  ];
+  const all = [obs.median, ...markers.map(m => m.at), ...strip.flatMap(s => [s.lo, s.hi])];
+  const xlo = Math.max(0, Math.floor(Math.min(...all) - 1)), xhi = Math.min(B, Math.ceil(Math.max(...all) + 1));
+  const sl = Math.min(260, Math.max(120, W * 0.34)), sw = W - sl - 12, rowH = 22, mTop = 10 + markers.length * 13, SH = mTop + strip.length * rowH + 48;
+  const SX = (x: number) => sl + (x - xlo) / (xhi - xlo || 1) * sw;
+  const step = Math.max(1, Math.ceil((xhi - xlo) / Math.max(2, Math.floor(sw / 70))));
+  return <>
+    {deff > 1 && <div className="chips" style={{ marginBottom: 6 }}>
+      <button className={'chip' + (clustered ? ' on' : '')} onClick={() => setClustered(true)}>clustered by game (n ÷ {deff})</button>
+      <button className={'chip' + (!clustered ? ' on' : '')} onClick={() => setClustered(false)}>every {g} independent</button>
+    </div>}
+    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${d.total} ${g}s against ${label} and the 95% range of ${band?.nl.label} samples`}>
+      {niceTicks(0, hi, 4).filter(t => t <= hi).map(tv => <g key={tv}><line x1={pl} x2={W - pr} y1={Y(tv)} y2={Y(tv)} className="grid" /><text x={pl - 4} y={Y(tv) + 4} textAnchor="end" className="ax">{Math.round(tv * 100)}%</text></g>)}
+      {bins.map((b, i) => <g key={b.key}>
+        <rect x={X(i) + 2} y={Y(b.share)} width={Math.max(1, bw - 4)} height={H - pb - Y(b.share)} rx={2} fill={color(v.color)} opacity={0.85}><title>{`${b.key}: ${b.n.toLocaleString()} ${g}s, ${(b.share * 100).toFixed(1)}%; ${label} ${(b.refShare * 100).toFixed(1)}%${band ? `; ${band.nl.label}: 95% of samples ${(band.r.bandLo[i] * 100).toFixed(1)}% to ${(band.r.bandHi[i] * 100).toFixed(1)}%` : ''}`}</title></rect>
+        {band && <rect x={X(i) + bw * 0.2} y={Y(band.r.bandHi[i])} width={bw * 0.6} height={Math.max(1.5, Y(band.r.bandLo[i]) - Y(band.r.bandHi[i]))} fill={color(v.color, 1)} opacity={0.55} />}
+        <path d={`M${X(i) + 1},${H - pb} V${Y(b.refShare)} H${X(i + 1) - 1} V${H - pb}`} fill="none" stroke="var(--text)" strokeWidth={1.5} />
+        {(!rot || B <= 16 || i % 2 === 0) && <text x={X(i) + bw / 2} y={H - pb + 12} textAnchor={rot ? 'end' : 'middle'} transform={rot ? `rotate(-45 ${X(i) + bw / 2} ${H - pb + 12})` : undefined} className="lab">{b.key.slice(0, 12)}</text>}
+      </g>)}
+    </svg>
+    <Legend items={[[color(v.color), `your ${nTxt(d.total)} ${g}s`], ['var(--text)', `outline: ${label} (the population)`], ...(band ? [[color(v.color, 1), `95% of samples: ${band.nl.label}`] as [string, string]] : [])]} />
+    <div className="small muted" style={{ marginTop: 10 }}>Median: yours against the 95% range of the median in realistic samples</div>
+    <svg viewBox={`0 0 ${W} ${SH}`} role="img" aria-label={`Median ${pos(obs.median)} against sample medians`}>
+      {Array.from({ length: Math.floor((xhi - xlo) / step) + 1 }, (_, k) => xlo + k * step).filter(x => x < B).map(x => <g key={x}>
+        <line x1={SX(x)} x2={SX(x)} y1={mTop - 4} y2={SH - 22} className="grid" />
+        <text x={SX(x)} y={SH - 8} textAnchor="start" className="ax">{bins[x].key.slice(0, 12)}</text>
+      </g>)}
+      {strip.map((s, i) => { const y = mTop + i * rowH; return <g key={i}>
+        <text x={sl - 8} y={y + 13} textAnchor="end" className="lab">{s.label.length > sl / 6.2 ? s.label.slice(0, Math.floor(sl / 6.2) - 1) + '…' : s.label}<title>{s.label}</title></text>
+        <rect x={SX(s.lo)} y={y + 4} width={Math.max(2, SX(s.hi) - SX(s.lo))} height={12} rx={3} fill={s.c} opacity={0.8}><title>{`${s.label}: 95% of sample medians between ${pos(s.lo)} and ${pos(s.hi)}`}</title></rect>
+        <line x1={SX(s.mid)} x2={SX(s.mid)} y1={y + 2} y2={y + 18} stroke="var(--text)" strokeWidth={1.5} />
+      </g>; })}
+      {markers.map((m, i) => <g key={i}>
+        <line x1={SX(m.at)} x2={SX(m.at)} y1={10 + i * 13} y2={SH - 22} className="ref" />
+        <text x={SX(m.at) + (SX(m.at) > sl + sw * 0.6 ? -4 : 4)} y={10 + i * 13 + 3} textAnchor={SX(m.at) > sl + sw * 0.6 ? 'end' : 'start'} className="ax">{m.label}: {pos(m.at)}</text>
+      </g>)}
+      <line x1={SX(obs.median)} x2={SX(obs.median)} y1={mTop - 6} y2={SH - 22} stroke={color(v.color)} strokeWidth={2.5} />
+      <text x={SX(obs.median) + (SX(obs.median) > sl + sw * 0.6 ? -4 : 4)} y={SH - 26} textAnchor={SX(obs.median) > sl + sw * 0.6 ? 'end' : 'start'} className="lab strong">yours: {pos(obs.median)}</text>
+    </svg>
+    <div className="tscroll"><table className="data">
+      <thead><tr><th>statistic</th><th className="num">yours</th><th className="num">{label}</th>{valid.map((t, i) => <React.Fragment key={i}><th className="num" title={t.nl.label}>{t.nl.label.slice(0, 34)}: 95% of samples</th><th className="num">p</th></React.Fragment>)}</tr></thead>
+      <tbody>{STAT_ROWS.map(row => <tr key={row.s}>
+        <td>{row.label}</td>
+        <td className="num"><b>{row.s === 'shape' ? '' : fmtStat(row.kind, obs[row.s])}</b></td>
+        <td className="num muted">{row.s === 'shape' ? '' : fmtStat(row.kind, valid[0] ? statsOf(pop.map(x => x / d.refTotal))[row.s] : NaN)}</td>
+        {valid.map((t, i) => { const x = t.r.tests[row.s]; const rej = !x.fitted && x.p < 0.05; return <React.Fragment key={i}>
+          <td className="num">{row.s === 'shape' ? `yours ${fmtStat('pct', sampleShape(sample, t.r.shares))}, samples ${fmtStat('pct', x.lo)} to ${fmtStat('pct', x.hi)}` : `${fmtStat(row.kind, x.lo)} to ${fmtStat(row.kind, x.hi)}`}</td>
+          <td className={'num' + (rej ? ' strong' : ' muted')} title={x.z != null ? `${Math.abs(x.z).toFixed(1)} simulated standard deviations from the samples' average` : ''}>{pText(x, t.r.sims)}{rej && x.z != null && Math.abs(x.z) >= 4 ? ` (z ${x.z > 0 ? '+' : ''}${x.z.toFixed(0)})` : ''}</td>
+        </React.Fragment>; })}
+      </tr>)}</tbody>
+    </table></div>
+    <div className="trendstats" style={{ gridTemplateColumns: `repeat(${Math.min(valid.length, W < 640 ? 1 : 3)}, minmax(0, 1fr))` }}>
+      {valid.map((t, i) => { const rej = STAT_ROWS.filter(r => !t.r.tests[r.s].fitted && t.r.tests[r.s].p < 0.05).map(r => r.label.toLowerCase()); const ok = STAT_ROWS.filter(r => !t.r.tests[r.s].fitted && t.r.tests[r.s].p >= 0.05).map(r => r.label.toLowerCase());
+        return <div key={i}><div className="k">{t.nl.label}</div>
+          <div className="v">{rej.length === 0 ? 'Looks like a realistic sample' : rej.includes('median') ? 'Not a realistic sample: the middle is off' : 'Middle fits, the spread or shape does not'}</div>
+          <div className="small muted">{t.nl.kind === 'matched' ? `Centered at ${pos(t.r.center!)}${t.nl.center === 'fit' ? ' (fitted to yours)' : ''}, spread ${t.r.spread!.toFixed(1)} ${unit}s${t.nl.spread === 'fit' ? ' (fitted)' : ''}. ` : ''}{rej.length ? `Off at 5%: ${rej.join(', ')}. ` : ''}{ok.length ? `Consistent: ${ok.join(', ')}.` : ''}</div></div>; })}
+    </div>
+    <div className="small muted">{`Each null draws ${valid[0] ? nTxt(valid[0].r.sims) : ''} samples of the same size as yours${useDeff > 1 ? ` divided by the design effect ${useDeff}${cfg.designNote ? ` (${cfg.designNote})` : ''}` : ''} and computes the same statistics on each. p = how often a realistic sample is at least as far from the null as yours (two-sided; shape one-sided); "fitted" statistics were matched to yours, so they cannot reject. Shape distance = half the summed difference in bin shares from the null (0% = identical).`}{unresolved.length ? ` Left out, its center has no value yet: ${unresolved.join(', ')}.` : ''}{msg ? ' ' + msg : ''}</div>
+  </>;
+}
+const sampleShape = (sample: number[], shares: number[]) => statsOf(sample, shares).shape;
 /** What if part of the group is shown below its median but belongs above it: the range the median can move. */
 function Hidden({ d, label, g, what, share, setShare }: { d: DistSummary; label: string; g: string; what: string; share: number; setShare: (x: number) => void }) {
   const r = hiddenRange(d, share / 100);
@@ -735,6 +863,7 @@ export const VIZ_TYPES: { id: Visualization['type']; name: string; needs?: strin
   { id: 'profile', name: 'Player card (baseline, consistency, peak, trend)' }, { id: 'ribbon', name: 'Ribbon (rolling baseline and spread)' },
   { id: 'distribution', name: 'Distribution vs a population', needs: 'one group-by (the bins) and a reference dataset' },
   { id: 'flow', name: 'Flow (where each group went)', needs: 'two group-bys: where rows started and where they ended up' },
+  { id: 'sampling', name: 'Sample vs population', needs: 'one group-by (the bins) and a reference dataset; tests the rows against realistic samples of it' },
 ];
 
 export function Viz(props: { v: Visualization; res: Result; cat: Catalog }) {
@@ -771,6 +900,7 @@ function VizInner({ v, res, cat }: { v: Visualization; res: Result; cat: Catalog
     case 'ribbon': return <Ribbon v={v} res={res} cat={cat} />;
     case 'distribution': return <Distribution v={v} res={res} cat={cat} />;
     case 'flow': return <Flow v={v} res={res} cat={cat} />;
+    case 'sampling': return <Sampling v={v} res={res} cat={cat} />;
   }
   return <Empty msg={`Unknown visualization ${v.type}`} />;
 }

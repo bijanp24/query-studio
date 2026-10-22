@@ -1,5 +1,5 @@
 import React from 'react';
-import type { CardColumn, CardRow, Visualization } from '../core/types';
+import type { CardColumn, CardRow, SamplingNull, Visualization } from '../core/types';
 import { useApp, runCached } from './ctx';
 import { Viz, VIZ_TYPES, autoType, color } from './viz/charts';
 import { Check, FiltersEditor, Num, Row, Sel, Txt, fieldOptions, uid } from './ui';
@@ -50,7 +50,8 @@ export function Vizs() {
             <Row label="Width"><Sel value={String(v.width)} onChange={x => set({ width: Number(x) as Visualization['width'] })} options={[['2', 'a third'], ['3', 'half'], ['4', 'two thirds'], ['6', 'full width']]} /></Row>
             {['line', 'area', 'trend', 'sparktable', 'profile', 'ribbon'].includes(v.type) && <Row label="Rolling window" hint="Rows per point when the query has no series operator of its own."><Num className="n8" value={v.window} min={2} onChange={x => set({ window: x || 10 })} /></Row>}
             {v.type === 'scatter' && q && <Row label="Horizontal axis"><Sel value={v.x || ''} blank="pick a field" onChange={x => set({ x })} options={fieldOptions(fieldsFor(ws, q.dataset, cat.tables[q.dataset]), app.showHidden, ['measure'])} /></Row>}
-            {v.type === 'distribution' && <DistEditor v={v} set={set} />}
+            {(v.type === 'distribution' || v.type === 'sampling') && <DistEditor v={v} set={set} />}
+            {v.type === 'sampling' && <SamplingEditor v={v} set={set} />}
             {v.type === 'profile' && <Row label="Trend per" hint="The trend is reported as the change per this many rows."><Num className="n8" value={v.per ?? 100} min={1} onChange={x => set({ per: x || 100 })} /></Row>}
             {v.type === 'column' && <Row label="Options"><Check checked={v.stack} onChange={x => set({ stack: x })}>stack the second group</Check></Row>}
             <Row label="Labels"><Check checked={v.labels !== false} onChange={x => set({ labels: x })}>show value labels</Check></Row>
@@ -78,6 +79,28 @@ function DistEditor({ v, set }: { v: Visualization; set: (p: Partial<Visualizati
     </>}
     <Row label="Hidden share (%)" hint="What if this share of the group is shown below its median but belongs above it, such as smurfs among the players you meet. The tile shows how far the median can move. Empty: off."><Num className="n8" value={v.hidden?.share} min={0} max={50} onChange={x => set({ hidden: x == null ? undefined : { ...v.hidden, share: x } })} /></Row>
     {v.hidden && <Row label="Call them"><Txt value={v.hidden.label} onChange={x => set({ hidden: { ...v.hidden!, label: x || undefined } })} placeholder="hidden" /></Row>}
+  </>;
+}
+
+function SamplingEditor({ v, set }: { v: Visualization; set: (p: Partial<Visualization>) => void }) {
+  const s = v.sampling || {};
+  const setS = (p: Partial<NonNullable<Visualization['sampling']>>) => set({ sampling: { ...s, ...p } });
+  const nulls = s.nulls || [];
+  const setN = (i: number, p: Partial<SamplingNull>) => setS({ nulls: nulls.map((n, j) => j === i ? { ...n, ...p } : n) });
+  const num = (x: SamplingNull['center']) => typeof x === 'number' ? x : undefined;
+  return <>
+    <Row label="Null populations" hint="Random members of the reference, or members matched near a center (in bins: 0 = bottom of the first bin), with a spread in bins. Leave center or spread empty to fit it to the sample.">
+      {nulls.map((n, i) => <div key={i} className="inline">
+        <Txt value={n.label} onChange={x => setN(i, { label: x })} placeholder="label" />
+        <Sel value={n.kind} onChange={x => setN(i, { kind: x })} options={[['population', 'random members'], ['matched', 'matched near a center']]} />
+        {n.kind === 'matched' && <>{typeof n.center === 'object' ? <span className="hint">center from {n.center.dataset}</span> : <Num className="n8" placeholder="center" value={num(n.center)} onChange={x => setN(i, { center: x == null ? 'fit' : x })} />}
+          <Num className="n8" placeholder="spread" value={num(n.spread as SamplingNull['center'])} onChange={x => setN(i, { spread: x == null ? 'fit' : x })} /></>}
+        <button className="ghost icon" onClick={() => setS({ nulls: nulls.filter((_, j) => j !== i) })}>×</button>
+      </div>)}
+      <button className="ghost" onClick={() => setS({ nulls: [...nulls, { label: nulls.length ? 'matched sample' : 'random sample', kind: nulls.length ? 'matched' : 'population', ...(nulls.length ? { center: 'fit', spread: 'fit' } : {}) }] })}>+ null</button>
+    </Row>
+    <Row label="Simulated samples"><Num className="n8" value={s.sims ?? 1000} min={50} onChange={x => setS({ sims: x || 1000 })} /></Row>
+    <Row label="Design effect" hint="When rows come in clusters (players met in the same game), samples are drawn at n ÷ this. 1 = independent rows."><Num className="n8" value={s.designEffect ?? 1} min={1} onChange={x => setS({ designEffect: x || 1 })} /></Row>
   </>;
 }
 
