@@ -3,7 +3,8 @@ Riot IDs and PUUIDs with short stable hashes. The user's own accounts keep their
 
   python3 scripts/make_snapshot.py <processed/latest> public/data/lol [names...]
 
-With names, only those outputs are written (for example: met_rank_today ladder rank_tracking my_rank).
+With names, only those outputs are written (for example: met_rank_today ladder rank_tracking my_rank
+rank_history rank_milestones rank_coverage).
 The rank files come from the folders next to processed/: ladder/*_summary.csv (the NA solo-queue
 ladder), rank_snapshots/*.csv (daily ranks of everyone met) and lp_snapshots.csv (the user's accounts)."""
 import csv, glob, hashlib, json, os, sys
@@ -47,6 +48,22 @@ for name in ['smurf_tests', 'smurf_test_summary', 'smurf_sweep', 'smurf_gap_hist
         r = csv.DictReader(fi); rows = list(r)
         for row in rows:
             if row.get('subject') and not row['subject'].startswith('player-'): row['subject'] = rid(row['subject'])
+        write(name, r.fieldnames, rows)
+
+# Rank history (data/scripts/build_rank_history.py): spells and interval milestones for the players in
+# met_rank_today plus the user's own accounts, hashed; the daily coverage table carries no player.
+keep = None
+for name in ['rank_history', 'rank_milestones', 'rank_coverage']:
+    if not want(name) or not os.path.exists(f'{src}/{name}.csv'): continue
+    if keep is None: keep = {r['puuid'] for r in csv.DictReader(open(f'{src}/met_rank_today.csv'))} | own_puuid
+    with open(f'{src}/{name}.csv', newline='') as fi:
+        r = csv.DictReader(fi); rows = []
+        for row in r:
+            if 'puuid' in row:
+                if row['puuid'] not in keep: continue
+                row['puuid'] = pid(row['puuid'])
+            if 'riot_id' in row: row['riot_id'] = rid(row['riot_id'])
+            rows.append(row)
         write(name, r.fieldnames, rows)
 
 # The ladder: players per tier and division, with the percentile range each division covers

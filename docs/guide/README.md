@@ -19,6 +19,7 @@ Open it at **https://bijanp24.github.io/query-studio/**, or see [Where it runs](
 7. [Read the Player profile](player-profile.md): Baseline, Consistency, Peak and Trend.
    - [Read the smurf test](smurf-test.md): every investigated player tested both ways, and how hidden smurfs move the median.
    - [Read the sample vs population test](sample-vs-population.md): is who you play a realistic sample of the ladder, a random one or one matched to your rank?
+   - [Track rank over time](rank-history.md): rank on the day you met each player and at fixed intervals after, for one player or everyone met.
 8. [Where it runs](where-it-runs.md): GitHub Pages, your own machine, and claude.ai, and where your work is saved.
 
 ## The idea in one picture
@@ -53,7 +54,6 @@ Each link is by name, so any query can feed any visualization and any visualizat
 
 Two additions are in progress and will get their own sections here when they land:
 
-- **Rank-distribution dashboards**: where the players you meet sit on the ladder, as ready-made dashboards.
 - **Baseline, Consistency, Peak and Trend as separate visualization types**, so each of the four numbers can be its own tile. Today they come together on the Player card (see [Read the Player profile](player-profile.md)).
 
 Developers looking for how the engine, SQL compiler and processed layer work should read [ARCHITECTURE.md](../ARCHITECTURE.md) instead.

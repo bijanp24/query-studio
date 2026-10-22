@@ -42,6 +42,32 @@ export interface DistSummary {
   superiority: number | null;
 }
 
+/** The bin holding the group's p-th quantile (0 to 1), and the reference percentile it falls at. */
+export function locateIn(bins: Bin[], refTotal: number, p: number): Located {
+  let before = 0;
+  for (const b of bins) {
+    if (b.share > 0 && before + b.share >= p - 1e-12) {
+      const t = Math.min(1, Math.max(0, (p - before) / b.share));
+      return { bin: b, refPct: refTotal ? b.refLo + t * (b.refHi - b.refLo) : null };
+    }
+    before += b.share;
+  }
+  const last = [...bins].reverse().find(b => b.share > 0)!;
+  return { bin: last, refPct: refTotal ? last.refHi : null };
+}
+
+/**
+ * Hidden members: a share of the group is shown in bins below its median although it belongs above it
+ * (smurfs, when the bins are ranks). Shown where they belong, they can leave the median where it is (each
+ * one lands exactly on it) or at most lift it to the group's (50 + share)th percentile (every one lands
+ * above the new median): taking s below the median and adding it above moves the half-way point to the
+ * old 0.5 + s. The range holds for any distribution and needs nothing beyond the binned counts.
+ */
+export function hiddenRange(d: DistSummary, share: number): { low: Located; high: Located; share: number } {
+  const s = Math.min(0.5, Math.max(0, share));
+  return { low: d.median, high: locateIn(d.bins, d.refTotal, Math.min(1, 0.5 + s)), share: s };
+}
+
 export function distribution(sample: BinCount[], reference: BinCount[]): DistSummary | null {
   const by = new Map<string, Bin>();
   const get = (k: string, order: number) => {
@@ -61,18 +87,7 @@ export function distribution(sample: BinCount[], reference: BinCount[]): DistSum
     b.refShare = refTotal ? b.ref / refTotal : 0;
     b.refLo = cum * 100; cum += b.refShare; b.refHi = cum * 100;
   }
-  const locate = (p: number): Located => {
-    let before = 0;
-    for (const b of bins) {
-      if (b.share > 0 && before + b.share >= p - 1e-12) {
-        const t = Math.min(1, Math.max(0, (p - before) / b.share));
-        return { bin: b, refPct: refTotal ? b.refLo + t * (b.refHi - b.refLo) : null };
-      }
-      before += b.share;
-    }
-    const last = [...bins].reverse().find(b => b.share > 0)!;
-    return { bin: last, refPct: refTotal ? last.refHi : null };
-  };
+  const locate = (p: number) => locateIn(bins, refTotal, p);
   const median = locate(0.5);
   const mode = bins.reduce((a, b) => b.n > a.n ? b : a);
   const superiority = refTotal ? bins.reduce((s, b) => s + b.share * (b.refLo / 100 + b.refShare / 2), 0) : null;

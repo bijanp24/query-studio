@@ -291,10 +291,18 @@ function sortGroups(groups: Group[], q: Query, fields: Field[], table?: Table) {
   const isTime = g0 && (g0.grain && g0.grain !== 'none');
   const isNum = g0 && table?.columns.find(c => c.name === fieldExpr(g0.field, fields))?.type === 'number';
   const sort = q.sort || (isTime || isNum ? 'key_asc' : 'count_desc');
+  // A dimension with sortBy (ranks in ladder order, milestones in time order) sorts by that expression.
+  const orderOf = q.groupBy.map(g => {
+    const src = fields.find(f => f.id === g.field)?.sortBy;
+    if (!src || (g.grain && g.grain !== 'none') || (table && missingColumns(src, table).length)) return null;
+    try { const n = compile(src); const memo = new Map<Group, number | null>(); return (gr: Group) => { if (!memo.has(gr)) memo.set(gr, gr.rows[0] ? toNum(evaluate(n, gr.rows[0])) : null); return memo.get(gr)!; }; } catch { return null; }
+  });
   const keyCmp = (a: Group, b: Group, from = 0) => {
     for (let i = from; i < a.keys.length; i++) {
       const x = a.keys[i], y = b.keys[i];
       if (q.groupBy[i]?.grain === 'weekday') { const d = WEEKDAY_ORDER.indexOf(String(x)) - WEEKDAY_ORDER.indexOf(String(y)); if (d) return d; continue; }
+      const o = orderOf[i];
+      if (o && x !== y && a.total == null && b.total == null) { const ox = o(a), oy = o(b); if (ox != null && oy != null && ox !== oy) return ox - oy; }
       if (x === y) continue; if (x == null) return 1; if (y == null) return -1;
       if (typeof x === 'number' && typeof y === 'number') return x - y;
       return String(x) < String(y) ? -1 : 1;
