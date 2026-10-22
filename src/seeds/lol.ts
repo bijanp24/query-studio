@@ -344,7 +344,7 @@ export function lolWorkspace(): Workspace {
     V({ id: 'v_my_rank_profile', name: 'My rank: baseline, consistency, peak, trend', queryId: 'q_my_rank', type: 'profile', color: 3, width: 3, window: 3, per: 10, note: 'Over the rank snapshots of the main account. Peak = the best 3 snapshots in a row; trend = change per 10 snapshots.' }),
     V({ id: 'v_my_rank_ribbon', name: 'My rank: rolling baseline and spread', queryId: 'q_my_rank', type: 'ribbon', color: 3, width: 3, window: 3 }),
   ];
-  const SUSPECT: Filter[] = [{ field: 'case_name', op: 'contains', value: 'Oct 22' }];
+  const SUSPECT: Filter[] = [{ field: 'case_name', op: 'contains', value: 'API pull' }];
   const HEADLINE: Filter[] = [{ field: 'headline', op: '=', value: '1' }];
   queries.push(
     Q({ id: 'q_st_summary', name: 'Smurf test: both hypotheses, every investigated player', dataset: 'smurf_test_summary', last: 0, followDashboard: false,
@@ -352,7 +352,7 @@ export function lolWorkspace(): Workspace {
       groupBy: [{ field: 'case_name' }, { field: 'shown_rank' }] }),
     Q({ id: 'q_st_evidence', name: 'Smurf test: evidence, tested both ways', dataset: 'smurf_tests', last: 0,
       measures: [{ field: 'log10_lr' }, { field: 'p_value_if_not_smurf' }, { field: 'p_value_if_smurf' }], groupBy: [{ field: 'case_name' }, { field: 'evidence' }] }),
-    Q({ id: 'q_st_weight', name: 'Smurf test: which way each piece of evidence points (Oct 22 suspect)', dataset: 'smurf_tests', last: 0, filters: SUSPECT,
+    Q({ id: 'q_st_weight', name: 'Smurf test: which way each piece of evidence points (Oct 22 suspect, API pull)', dataset: 'smurf_tests', last: 0, filters: SUSPECT,
       measures: m('log10_lr'), groupBy: [{ field: 'evidence' }] }),
     Q({ id: 'q_sm_sweep', name: 'Smurfs and the median: how far the median moves', dataset: 'smurf_sweep', last: 0, filters: [...HEADLINE, { field: 'smurf_share_pct', op: 'in', value: '0,1,2,3,4,5,6,7,8,9,10,12,14,16,18,20' }], sort: 'key_asc',
       measures: m('median_shift_points'), groupBy: [{ field: 'share_label' }, { field: 'scenario' }] }),
@@ -369,7 +369,7 @@ export function lolWorkspace(): Workspace {
   );
   vizs.push(
     V({ id: 'v_st_summary', name: 'Smurf or not: both hypotheses tested', queryId: 'q_st_summary', type: 'table', width: 6, note: 'p if NOT a smurf below 0.05 rejects "plays at their shown rank"; p if a smurf below 0.05 rejects "smurf". Neither rejected = the evidence cannot decide. The Bayes factor multiplies the items as if independent, which overstates certainty. The 9% prior is the share quoted from Riot.' }),
-    V({ id: 'v_st_weight', name: 'Which way the evidence points: Oct 22 suspect', queryId: 'q_st_weight', type: 'bar', color: 8, width: 6, note: 'Right of zero favours a smurf, left favours not a smurf. +1 = ten times likelier if a smurf. From the op.gg screenshots until the API pull runs.' }),
+    V({ id: 'v_st_weight', name: 'Which way the evidence points: Oct 22 suspect', queryId: 'q_st_weight', type: 'bar', color: 8, width: 6, note: 'Right of zero favours a smurf, left favours not a smurf. +1 = ten times likelier if a smurf. From the Riot API pull: 37 Ranked Solo games, rank today. The op.gg snapshot row in the tables is kept for comparison.' }),
     V({ id: 'v_st_evidence', name: 'Every piece of evidence, tested both ways', queryId: 'q_st_evidence', type: 'table', width: 6 }),
     V({ id: 'v_sm_sweep', name: 'If smurfs below the median were shown at their true rank, how far would the median move?', queryId: 'q_sm_sweep', type: 'column', color: 1, width: 6, note: 'Rank points (100 = one division) added to the median rank of the players met (Plat I 10 LP today), by the share of all players met who are smurfs from below the median. A leaves the median where it is; the upper bound is the most any share can move it.' }),
     V({ id: 'v_sm_table', name: 'Median rank under each scenario', queryId: 'q_sm_table', type: 'table', width: 3 }),
