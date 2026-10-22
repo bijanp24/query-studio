@@ -1,0 +1,21 @@
+scenario,slot,rank_points,rank,is_median_pair
+shown ranks,1,835,Silver IV 35 LP,0
+shown ranks,2,1203,Gold IV 3 LP,0
+shown ranks,3,1338,Gold III 38 LP,0
+shown ranks,4,1375,Gold III 75 LP,0
+shown ranks,5,1381,Gold III 81 LP,1
+shown ranks,6,1386,Gold III 86 LP,1
+shown ranks,7,1413,Gold II 13 LP,0
+shown ranks,8,1439,Gold II 39 LP,0
+shown ranks,9,1493,Gold II 93 LP,0
+shown ranks,10,1620,Platinum IV 20 LP,0
+Silver IV played as Plat IV,1,1203,Gold IV 3 LP,0
+Silver IV played as Plat IV,2,1338,Gold III 38 LP,0
+Silver IV played as Plat IV,3,1375,Gold III 75 LP,0
+Silver IV played as Plat IV,4,1381,Gold III 81 LP,0
+Silver IV played as Plat IV,5,1386,Gold III 86 LP,1
+Silver IV played as Plat IV,6,1413,Gold II 13 LP,1
+Silver IV played as Plat IV,7,1439,Gold II 39 LP,0
+Silver IV played as Plat IV,8,1493,Gold II 93 LP,0
+Silver IV played as Plat IV,9,1620,Platinum IV 20 LP,0
+Silver IV played as Plat IV,10,1635,Platinum IV 35 LP,0

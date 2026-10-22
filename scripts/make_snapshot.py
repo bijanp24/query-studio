@@ -40,6 +40,15 @@ for name in ['my_matchups', 'my_games', 'player_games', 'roster', 'lobby_relativ
             rows.append(row)
         write(name, r.fieldnames, rows)
 
+# The smurf test and median sensitivity tables are written already hashed by data/scripts/smurf_qs_export.py.
+for name in ['smurf_tests', 'smurf_test_summary', 'smurf_sweep', 'smurf_gap_hist', 'smurf_shape', 'smurf_lobby']:
+    if not want(name) or not os.path.exists(f'{src}/{name}.csv'): continue
+    with open(f'{src}/{name}.csv', newline='') as fi:
+        r = csv.DictReader(fi); rows = list(r)
+        for row in rows:
+            if row.get('subject') and not row['subject'].startswith('player-'): row['subject'] = rid(row['subject'])
+        write(name, r.fieldnames, rows)
+
 # The ladder: players per tier and division, with the percentile range each division covers
 # (0 = bottom of Iron, 100 = top of Challenger).
 summ = sorted(glob.glob(f'{data}/ladder/*_summary.csv'))

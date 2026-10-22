@@ -1,0 +1,3 @@
+case_name,subject,shown_rank,evidence_items,bayes_factor,log10_bayes_factor,prior,posterior_smurf,posterior_even_odds,p_if_not_smurf,p_if_smurf,not_smurf_hypothesis,smurf_hypothesis
+Oct 15 report: Gold IV teammate (Normal Draft),player-f4bf9e,Gold IV 47 LP,4,0.0038,-2.4188,0.09,0.0004,0.0038,0.99,0.0005,not rejected,rejected at 5%
+Oct 22 suspect: Silver IV in a Gold lobby (op.gg only),player-408455,Silver IV 35 LP,5,3.3189,0.521,0.09,0.2471,0.7685,0.2951,0.4946,not rejected,not rejected
