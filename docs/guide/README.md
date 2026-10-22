@@ -17,6 +17,7 @@ Open it at **https://bijanp24.github.io/query-studio/**, or see [Where it runs](
 5. [Assemble a dashboard](dashboards.md): tiles, widths, drag and drop, and dashboard-wide filters.
 6. [Ask and suggested questions](ask.md): type a question in plain English and get a query back.
 7. [Read the Player profile](player-profile.md): Baseline, Consistency, Peak and Trend.
+   - [Read the smurf test](smurf-test.md): every investigated player tested both ways, and how hidden smurfs move the median.
 8. [Where it runs](where-it-runs.md): GitHub Pages, your own machine, and claude.ai, and where your work is saved.
 
 ## The idea in one picture

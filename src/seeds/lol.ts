@@ -7,7 +7,9 @@ const LOBBY_ROLE: Compare = { kind: 'reference', dataset: 'lobby_players', filte
 const LOBBY_ROLE_CHAMP: Compare = { kind: 'reference', dataset: 'lobby_players', filters: [{ field: 'queue_name', op: '=', value: 'Ranked Solo' }], weightBy: ['position', 'champion'], label: 'lobby players, same role and champion' };
 const opp = (col: string, label = 'my lane opponents, same games'): Compare => ({ kind: 'paired', field: col, label });
 
-const FILES = ['my_matchups', 'my_games', 'player_games', 'roster', 'lobby_relative', 'champion_baselines', 'tier_baselines', 'met_rank_today'];
+const FILES = ['my_matchups', 'my_games', 'player_games', 'roster', 'lobby_relative', 'champion_baselines', 'tier_baselines', 'met_rank_today',
+  // the smurf test and the median sensitivity (data/scripts/hypothesis_test.py, smurf_median_sensitivity.py, smurf_qs_export.py); no Riot IDs
+  'smurf_tests', 'smurf_test_summary', 'smurf_sweep', 'smurf_gap_hist', 'smurf_shape', 'smurf_lobby'];
 // Published with the app only: the NA ladder, rank snapshots of everyone met, and the user's own accounts over time.
 const BUNDLED_ONLY = ['ladder', 'rank_tracking', 'my_rank'];
 
@@ -114,7 +116,20 @@ export function lolWorkspace(): Workspace {
       id: 'my_rank', name: 'My rank over time', grain: 'rank snapshot', sequence: 'snapshot_utc', feeds: [{ itemId: 'b_my_rank', priority: 1 }], key: ['account', 'snapshot_utc'],
       description: 'Solo-queue rank of each of your accounts at every snapshot the pipeline took.',
       derived: [{ name: 'account_name', expr: "split_part(account, '#', 1)" }, ...rankColumns('tier', 'division')],
+    },    {
+      id: 'smurf_tests', name: 'Smurf test: evidence', grain: 'evidence item', feeds: both('smurf_tests', true), key: ['case_name', 'evidence'],
+      description: 'One row per piece of evidence per investigated player, tested both ways: H0 = plays at their shown rank (not a smurf), H1 = plays well above it. P(e | H0) and P(e | H1) come from players met in your lobbies; the likelihood ratio says which hypothesis the evidence favours and by how much; each p-value asks how surprising the evidence is if that hypothesis were true. Subjects are hashed.',
     },
+    { id: 'smurf_test_summary', name: 'Smurf test: verdicts', grain: 'investigated player', feeds: both('smurf_test_summary', true), key: ['case_name'],
+      description: 'One row per investigated player: combined p-value under each hypothesis, the Bayes factor (product of likelihood ratios, treating items as independent) and the posterior chance of a smurf from a 9% prior and from even odds.' },
+    { id: 'smurf_sweep', name: 'Smurfs and the median: sweep', grain: 'scenario × smurf share', feeds: both('smurf_sweep', true), key: ['scenario', 'smurf_share_pct'],
+      description: 'What happens to the median rank of the players met if a share of the players below the median are smurfs whose true rank is higher. A: smurfs land exactly on the median. B: smurfs land at the level of the lobbies they were met in. C: smurfs land anywhere above the median. Upper bound: every smurf lands above the new median, so the median becomes the old (50 + share)th percentile.' },
+    { id: 'smurf_gap_hist', name: 'Smurfs and the median: lobby gap', grain: 'gap bin × account group', feeds: both('smurf_gap_hist', true), key: ['games_group', 'gap_bin'],
+      description: 'Each player in your Ranked Solo games: their rank today minus the median rank today of the other nine, in divisions, split by how many solo games they have played this season. Matchmaking pairs by hidden MMR, so a player far below their own lobby is rated above their shown rank.' },
+    { id: 'smurf_shape', name: 'Smurfs and the median: shape check', grain: 'simulation', feeds: both('smurf_shape', true), key: ['true_distribution', 'smurf_share_pct'],
+      description: 'Could a symmetric rank distribution hide smurfs? Start from a smurf-free distribution, demote a share of players by gaps drawn from real lobby gaps, and measure the skew of what would be shown. Observed skew of the players met: -0.03 (95% range -0.10 to +0.04).' },
+    { id: 'smurf_lobby', name: 'Smurfs and the median: one lobby', grain: 'player slot', feeds: both('smurf_lobby', true), key: ['scenario', 'slot'],
+      description: 'The ten ranks in one live game (Silver IV among Gold II to Plat IV), sorted, as shown and with the Silver IV played as Plat IV. The median of ten is the average of slots 5 and 6.' },
   ];
 
   const F = (dataset: string, id: string, label: string, o: Partial<Field> = {}): Field => ({ id, dataset, label, role: 'measure', expr: id, type: 'number', agg: 'avg', format: 'number', polarity: 'higher', additivity: 'non_additive', ...o });
@@ -192,6 +207,34 @@ export function lolWorkspace(): Workspace {
     F('my_rank', 'lp', 'LP', { agg: 'median', format: 'integer', polarity: 'higher' }),
   ];
 
+  fields.push(
+    D('smurf_tests', 'case_name', 'case'), D('smurf_tests', 'test', 'test (smurf or shared account)'), D('smurf_tests', 'evidence', 'evidence'), D('smurf_tests', 'observed', 'observed'), D('smurf_tests', 'favours', 'favours'), D('smurf_tests', 'basis', 'basis (data or assumed)'),
+    F('smurf_tests', 'log10_lr', 'evidence weight (log10 likelihood ratio, + = smurf)', { agg: 'sum', format: 'decimal2', additivity: 'additive', polarity: 'neutral', description: 'log10 of P(e | smurf) / P(e | not a smurf). +1 = ten times likelier if a smurf, -1 = ten times likelier if not. Sums across independent items.' }),
+    F('smurf_tests', 'likelihood_ratio', 'likelihood ratio (smurf : not)', { agg: 'max', format: 'decimal2', polarity: 'neutral' }),
+    F('smurf_tests', 'p_value_if_not_smurf', 'p-value if NOT a smurf', { agg: 'min', format: 'decimal2', polarity: 'neutral', description: 'How often a player who plays at their shown rank shows evidence at least this smurf-like. Below 0.05 rejects "not a smurf" on this item.' }),
+    F('smurf_tests', 'p_value_if_smurf', 'p-value if a smurf', { agg: 'min', format: 'decimal2', polarity: 'neutral', description: 'How often a smurf shows evidence at least this un-smurf-like. Below 0.05 rejects "smurf" on this item.' }),
+    D('smurf_test_summary', 'case_name', 'case'), D('smurf_test_summary', 'shown_rank', 'shown rank'), D('smurf_test_summary', 'not_smurf_hypothesis', 'assume NOT a smurf'), D('smurf_test_summary', 'smurf_hypothesis', 'assume a smurf'), D('smurf_test_summary', 'shared_account', 'shared account (one person vs two)'),
+    F('smurf_test_summary', 'p_if_not_smurf', 'combined p if NOT a smurf', { agg: 'min', format: 'decimal2', polarity: 'neutral' }),
+    F('smurf_test_summary', 'p_if_smurf', 'combined p if a smurf', { agg: 'min', format: 'decimal2', polarity: 'neutral' }),
+    F('smurf_test_summary', 'bayes_factor', 'Bayes factor (smurf : not)', { agg: 'max', format: 'decimal2', polarity: 'neutral' }),
+    F('smurf_test_summary', 'posterior_smurf', 'chance of a smurf, 9% prior', { agg: 'max', format: 'percent', polarity: 'neutral' }),
+    F('smurf_test_summary', 'posterior_even_odds', 'chance of a smurf, even odds', { agg: 'max', format: 'percent', polarity: 'neutral' }),
+    D('smurf_sweep', 'scenario', 'scenario'), D('smurf_sweep', 'share_label', 'smurf share of players met'), D('smurf_sweep', 'median_rank', 'median rank'),
+    F('smurf_sweep', 'median_shift_points', 'median moves up (rank points, 100 = one division)', { agg: 'avg', format: 'integer', polarity: 'neutral' }),
+    F('smurf_sweep', 'median_ladder_pct', 'median ladder percentile', { agg: 'avg', format: 'decimal1', polarity: 'neutral' }),
+    F('smurf_sweep', 'median_ladder_shift', 'median moves up (ladder percentile points)', { agg: 'avg', format: 'decimal1', polarity: 'neutral' }),
+    F('smurf_sweep', 'iqr_points', 'middle half (IQR, rank points)', { agg: 'avg', format: 'integer', polarity: 'neutral' }),
+    F('smurf_sweep', 'fisher_skew', 'skew', { agg: 'avg', format: 'decimal2', polarity: 'neutral' }),
+    D('smurf_gap_hist', 'games_group', 'season games'), D('smurf_gap_hist', 'gap_bin', 'rank vs own lobby (rank points, 100 = one division)', { type: 'number' }),
+    F('smurf_gap_hist', 'share_pct', 'share of the group (%)', { agg: 'sum', format: 'decimal1', additivity: 'additive', polarity: 'neutral' }),
+    F('smurf_gap_hist', 'player_games', 'player-games', { agg: 'sum', format: 'integer', additivity: 'additive', polarity: 'neutral' }),
+    D('smurf_shape', 'true_distribution', 'smurf-free starting distribution'), D('smurf_shape', 'smurf_share_pct', 'hidden smurf share (%)'),
+    F('smurf_shape', 'fisher_skew', 'skew of the shown ranks', { agg: 'avg', format: 'decimal2', polarity: 'neutral' }),
+    F('smurf_shape', 'excess_kurtosis', 'excess kurtosis', { agg: 'avg', format: 'decimal2', polarity: 'neutral' }),
+    F('smurf_shape', 'inside_observed_range', 'inside the observed skew range', { agg: 'max', format: 'integer', polarity: 'neutral' }),
+    D('smurf_lobby', 'scenario', 'scenario'), D('smurf_lobby', 'rank', 'rank'), D('smurf_lobby', 'slot', 'slot (sorted)'),
+    F('smurf_lobby', 'rank_points', 'rank points', { agg: 'median', format: 'integer', polarity: 'neutral' }),
+  );
   const Q = (o: Partial<Query> & Pick<Query, 'id' | 'name'>): Query => ({ dataset: 'games', measures: [], groupBy: [], filters: [], last: 50, compare: { kind: 'none' }, followDashboard: true, ...o });
   const V = (o: Partial<Visualization> & Pick<Visualization, 'id' | 'name' | 'queryId' | 'type'>): Visualization => ({ color: 1, width: 3, window: 10, labels: true, ...o });
   const m = (field: string, agg?: Query['measures'][number]['agg']) => [{ field, ...(agg ? { agg } : {}) }];
@@ -301,6 +344,39 @@ export function lolWorkspace(): Workspace {
     V({ id: 'v_my_rank_profile', name: 'My rank: baseline, consistency, peak, trend', queryId: 'q_my_rank', type: 'profile', color: 3, width: 3, window: 3, per: 10, note: 'Over the rank snapshots of the main account. Peak = the best 3 snapshots in a row; trend = change per 10 snapshots.' }),
     V({ id: 'v_my_rank_ribbon', name: 'My rank: rolling baseline and spread', queryId: 'q_my_rank', type: 'ribbon', color: 3, width: 3, window: 3 }),
   ];
+  const SUSPECT: Filter[] = [{ field: 'case_name', op: 'contains', value: 'API pull' }, { field: 'test', op: '=', value: 'smurf' }];
+  const HEADLINE: Filter[] = [{ field: 'headline', op: '=', value: '1' }];
+  queries.push(
+    Q({ id: 'q_st_summary', name: 'Smurf test: both hypotheses, every investigated player', dataset: 'smurf_test_summary', last: 0, followDashboard: false,
+      measures: [{ field: 'p_if_not_smurf' }, { field: 'p_if_smurf' }, { field: 'bayes_factor' }, { field: 'posterior_smurf' }, { field: 'posterior_even_odds' }],
+      groupBy: [{ field: 'case_name' }, { field: 'shown_rank' }, { field: 'shared_account' }] }),
+    Q({ id: 'q_st_evidence', name: 'Smurf test: evidence, tested both ways', dataset: 'smurf_tests', last: 0,
+      measures: [{ field: 'log10_lr' }, { field: 'p_value_if_not_smurf' }, { field: 'p_value_if_smurf' }], groupBy: [{ field: 'case_name' }, { field: 'test' }, { field: 'evidence' }] }),
+    Q({ id: 'q_st_weight', name: 'Smurf test: which way each piece of evidence points (Oct 22 suspect, API pull)', dataset: 'smurf_tests', last: 0, filters: SUSPECT,
+      measures: m('log10_lr'), groupBy: [{ field: 'evidence' }] }),
+    Q({ id: 'q_sm_sweep', name: 'Smurfs and the median: how far the median moves', dataset: 'smurf_sweep', last: 0, filters: [...HEADLINE, { field: 'smurf_share_pct', op: 'in', value: '0,1,2,3,4,5,6,7,8,9,10,12,14,16,18,20' }], sort: 'key_asc',
+      measures: m('median_shift_points'), groupBy: [{ field: 'share_label' }, { field: 'scenario' }] }),
+    Q({ id: 'q_sm_table', name: 'Smurfs and the median: median rank and ladder percentile by scenario', dataset: 'smurf_sweep', last: 0,
+      filters: [...HEADLINE, { field: 'smurf_share_pct', op: 'in', value: '0,5,9,15,20' }],
+      measures: [{ field: 'median_ladder_pct' }, { field: 'median_ladder_shift' }, { field: 'median_shift_points' }, { field: 'iqr_points' }], groupBy: [{ field: 'scenario' }, { field: 'share_label' }, { field: 'median_rank' }] }),
+    Q({ id: 'q_sm_gap', name: 'Rank vs own lobby: established vs new accounts', dataset: 'smurf_gap_hist', last: 0, sort: 'key_asc',
+      filters: [{ field: 'games_group', op: 'in', value: 'Established: 100+ season games,New: 20 or fewer season games' }],
+      measures: m('share_pct'), groupBy: [{ field: 'gap_bin' }, { field: 'games_group' }] }),
+    Q({ id: 'q_sm_shape', name: 'Could a symmetric distribution hide smurfs?', dataset: 'smurf_shape', last: 0,
+      measures: [{ field: 'fisher_skew' }, { field: 'excess_kurtosis' }, { field: 'inside_observed_range' }], groupBy: [{ field: 'true_distribution' }, { field: 'smurf_share_pct' }] }),
+    Q({ id: 'q_sm_lobby', name: 'One lobby: shown ranks vs Silver IV played as Plat IV', dataset: 'smurf_lobby', last: 0,
+      measures: m('rank_points'), groupBy: [{ field: 'slot' }, { field: 'scenario' }] }),
+  );
+  vizs.push(
+    V({ id: 'v_st_summary', name: 'Smurf or not: both hypotheses tested', queryId: 'q_st_summary', type: 'table', width: 6, note: 'p if NOT a smurf below 0.05 rejects "plays at their shown rank"; p if a smurf below 0.05 rejects "smurf". Neither rejected = the evidence cannot decide. The Bayes factor multiplies the items as if independent, which overstates certainty. The 9% prior is the share quoted from Riot. Shared account is a separate test: one person on the account vs a second person (a booster) playing the main champion, judged by whether back-to-back games switch between the main champion and the rest.' }),
+    V({ id: 'v_st_weight', name: 'Which way the evidence points: Oct 22 suspect', queryId: 'q_st_weight', type: 'bar', color: 8, width: 6, note: 'Right of zero favours a smurf, left favours not a smurf. +1 = ten times likelier if a smurf. From the Riot API pull: 37 Ranked Solo games, rank today. The op.gg snapshot row in the tables is kept for comparison.' }),
+    V({ id: 'v_st_evidence', name: 'Every piece of evidence, tested both ways', queryId: 'q_st_evidence', type: 'table', width: 6 }),
+    V({ id: 'v_sm_sweep', name: 'If smurfs below the median were shown at their true rank, how far would the median move?', queryId: 'q_sm_sweep', type: 'column', color: 1, width: 6, note: 'Rank points (100 = one division) added to the median rank of the players met (Plat I 10 LP today), by the share of all players met who are smurfs from below the median. A leaves the median where it is; the upper bound is the most any share can move it.' }),
+    V({ id: 'v_sm_table', name: 'Median rank under each scenario', queryId: 'q_sm_table', type: 'table', width: 3 }),
+    V({ id: 'v_sm_lobby', name: 'One lobby of ten', queryId: 'q_sm_lobby', type: 'column', color: 4, width: 3, note: 'Sorted ranks. The median of ten is the average of slots 5 and 6: Gold III 83 LP shown, Gold III 99 LP with the Silver IV played as Plat IV. The mean moves five times as far as the median.' }),
+    V({ id: 'v_sm_gap', name: 'How far below their own lobby players sit: established vs new accounts', queryId: 'q_sm_gap', type: 'column', color: 2, width: 6, note: 'Each player in your Ranked Solo games against the median of the other nine (rank today). New accounts sit 5+ divisions below their lobby in 38% of games, established ones in 3%, and new accounts are never far above it.' }),
+    V({ id: 'v_sm_shape', name: 'Could 9% hidden smurfs sit inside a symmetric distribution?', queryId: 'q_sm_shape', type: 'table', width: 6, note: 'Observed skew of the players met: -0.03, 95% range -0.10 to +0.04. inside = 1 when the shown ranks would still look like what we observed.' }),
+  );
   const T = (ids: string[]): Dashboard['tiles'] => ids.map((vizId, i) => ({ id: `t_${vizId}_${i}`, vizId }));
   const dashboards: Dashboard[] = [
     { id: 'd_lens', name: 'Lobby lens (no rank)', filters: [], tiles: T(['v_card', 'v_solo', 'v_vision', 'v_rel', 'v_jg']) },
@@ -309,6 +385,8 @@ export function lolWorkspace(): Workspace {
     { id: 'd_profile', name: 'Player profile', filters: [], tiles: T(['v_profile', 'v_lobby_ribbon', 'v_cs_ribbon', 'v_met_hist', 'v_lobby_acct']) },
     { id: 'd_matchups', name: 'Champions & matchups', filters: [], tiles: T(['v_champ_wr', 'v_gp', 'v_kda_champ', 'v_heat']) },
     { id: 'd_met_rank', name: 'Who I play: rank distribution', description: 'The rank of everyone you have played with or against, against the whole ladder.', filters: [], tiles: T(['v_met_dist', 'v_met_dist_enemy', 'v_met_dist_ally', 'v_met_pct_hist', 'v_met_side']) },
+    { id: 'd_smurf_test', name: 'Smurf test: both hypotheses', description: 'Every investigated player tested both ways: assume they play at their shown rank, and assume they are a smurf.', filters: [], tiles: T(['v_st_summary', 'v_st_weight', 'v_st_evidence']) },
+    { id: 'd_smurf_median', name: 'Smurfs and the median', description: 'How hidden smurfs below the median would move the median and shape of the ranks of the players you meet.', filters: [], tiles: T(['v_sm_sweep', 'v_sm_table', 'v_sm_lobby', 'v_sm_gap', 'v_sm_shape']) },
     { id: 'd_tracking', name: 'Rank tracking', description: 'Rank snapshots over time: the players you met, and your own accounts.', filters: [], tiles: T(['v_flow_tier', 'v_flow_div', 'v_track_by_date', 'v_track_change', 'v_track_moved', 'v_my_rank_profile', 'v_my_rank_ribbon']) },
   ];
   return {
@@ -320,6 +398,7 @@ export function lolWorkspace(): Workspace {
       'Default comparison for "vs my lobbies / lobby players" is reference dataset lobby_players filtered queue_name = Ranked Solo, weightBy position. "vs my lane opponents" is paired with the opp_ column. Rank and tier fields are hidden; do not build on them unless asked.',
       'Player profile: lobby_level = where the other nine players sit on the ladder (0-100 percentile, rank as of the pull). Baseline, consistency, peak and trend of any measure = viz type profile (one card per measure, no groupBy, last 0); a rolling baseline with its spread = viz type ribbon. Use agg median for per-game stats when the user asks for baseline or consistency; p25, p75 and iqr are available. roster.ladder_pct = each player met, ladder percentile today.',
       'Rank distribution: met_players = one row per player met with their rank today (rank_label in ladder order via rank_step, ladder_pct 0-100, side = ally / enemy / both). ladder = the NA solo-queue ladder, one row per division with players = accounts. "Rank of the players I play", "vs the ladder" → query met_players, measures [players], groupBy rank_label, filter rank_label not_null, last 0, visualization distribution with reference ladder. rank_tracking = one row per player met per rank snapshot (ladder_change, divisions_moved, moved_up compare with that player\'s previous snapshot). Rank flow = viz type flow on rank_tracking grouped by [prev_tier_name, tier_name] (or [prev_rank_label, rank_label] for divisions), measure players. my_rank = the user\'s own accounts over time (ladder_pct); baseline, consistency, peak and trend of the user\'s rank = profile on my_rank filtered to one account_name.',
+      'Smurf test: smurf_tests = one row per evidence item per investigated player (case_name, evidence, log10_lr + = smurf, p_value_if_not_smurf, p_value_if_smurf); smurf_test_summary = one row per player (p_if_not_smurf, p_if_smurf, bayes_factor, posterior_smurf). smurf_sweep = median of the players met when a share (smurf_share_pct) of players below the median are smurfs, by scenario (headline = 1 for the four main ones). smurf_gap_hist = rank vs own lobby by season games group. smurf_shape = skew of shown ranks with hidden smurfs.',
       'game_weight = the user\'s highlight weight per game (1 when unset); highlighted = 1 for games weighted above 1. "Showcase", "highlight", "my best games" → weight game_weight or filter highlighted = 1. Weighting schemes are fields with role weight (w_learning_curve, w_main_role, w_support_half, w_duration, w_highlights); set query.weight to a weight field id or to an expression such as if(position = \'UTILITY\', 0.5, 1) or if(champion = \'Riven\' and champ_game_no > 150, 2, 1). champ_game_no = the Nth game on that champion in this history; champ_experience buckets it; hard_champion = 1 for mechanically hard champions. Time-weighted CS/min = field cs_per_min_tw (ratio of total CS to total minutes). enemy_jg_ganks_pre15 exists only for the user\'s own games.',
     ].join('\n'),
     suggestions: [
@@ -332,10 +411,12 @@ export function lolWorkspace(): Workspace {
       { text: 'Is my lobby level rising or falling?', vizId: 'v_lobby_ribbon' },
       { text: 'Rank of everyone I have played with or against', vizId: 'v_met_hist' },
       { text: 'Which account gets the hardest lobbies?', vizId: 'v_lobby_acct' },
+      { text: 'Is this player a smurf? Test both hypotheses', vizId: 'v_st_summary' },
+      { text: 'If smurfs were shown at their true rank, how far would my median move?', vizId: 'v_sm_sweep' },
       { text: 'Is my CS per min more consistent on Gangplank than on my other champions?' },
       { text: 'My peak 20-game stretch for solo kills, and when it was' },
       { text: 'Are my solo kills rising while my lobby level stays flat?' },
     ],
-    sources, items, datasets, fields, queries, visualizations: vizs, dashboards, activeDashboard: 'd_lens', seedVersion: 3,
+    sources, items, datasets, fields, queries, visualizations: vizs, dashboards, activeDashboard: 'd_lens', seedVersion: 4,
   };
 }

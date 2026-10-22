@@ -1,0 +1,166 @@
+scenario,headline,smurf_share_pct,share_label,selection,true_rank,median_points,median_rank,median_shift_points,median_ladder_pct,median_ladder_shift,iqr_points,fisher_skew,bowley_skew
+A. Smurfs land exactly on the median,1,0,00%,random below median,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,638.0,-0.0326,0.0282
+C. Smurfs land anywhere above the median,1,0,00%,random below median,drawn from the upper half,1910.0,Platinum I 10 LP,0.0,81.211,0.0,638.0,-0.0326,0.0282
+"random below median, their lobby level",0,0,00%,random below median,their lobby level,1910.0,Platinum I 10 LP,0.0,81.211,0.0,638.0,-0.0326,0.0282
+"deepest first, exactly the median",0,0,00%,deepest first,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,638.0,-0.0326,0.0282
+"deepest first, drawn from the upper half",0,0,00%,deepest first,drawn from the upper half,1910.0,Platinum I 10 LP,0.0,81.211,0.0,638.0,-0.0326,0.0282
+"deepest first, their lobby level",0,0,00%,deepest first,their lobby level,1910.0,Platinum I 10 LP,0.0,81.211,0.0,638.0,-0.0326,0.0282
+"most below own lobby, exactly the median",0,0,00%,most below own lobby,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,638.0,-0.0326,0.0282
+"most below own lobby, drawn from the upper half",0,0,00%,most below own lobby,drawn from the upper half,1910.0,Platinum I 10 LP,0.0,81.211,0.0,638.0,-0.0326,0.0282
+B. Smurfs land at their own lobby level,1,0,00%,most below own lobby,their lobby level,1910.0,Platinum I 10 LP,0.0,81.211,0.0,638.0,-0.0326,0.0282
+A. Smurfs land exactly on the median,1,1,01%,random below median,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,638.0,-0.0397,0.0282
+C. Smurfs land anywhere above the median,1,1,01%,random below median,drawn from the upper half,1925.975,Platinum I 25 LP,15.975,81.596,0.385,649.2375,-0.0486,-0.0042
+"random below median, their lobby level",0,1,01%,random below median,their lobby level,1912.85,Platinum I 12 LP,2.85,81.2797,0.0687,638.975,-0.0364,0.0208
+"deepest first, exactly the median",0,1,01%,deepest first,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,638.0,0.1595,0.0282
+"deepest first, drawn from the upper half",0,1,01%,deepest first,drawn from the upper half,1926.075,Platinum I 26 LP,16.075,81.5984,0.3874,649.8625,0.1493,-0.0035
+"deepest first, their lobby level",0,1,01%,deepest first,their lobby level,1910.0,Platinum I 10 LP,0.0,81.211,0.0,638.0,-0.0246,0.0282
+"most below own lobby, exactly the median",0,1,01%,most below own lobby,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,638.0,-0.0361,0.0282
+"most below own lobby, drawn from the upper half",0,1,01%,most below own lobby,drawn from the upper half,1926.05,Platinum I 26 LP,16.05,81.5978,0.3868,649.5375,-0.0425,-0.0039
+B. Smurfs land at their own lobby level,1,1,01%,most below own lobby,their lobby level,1923.0,Platinum I 23 LP,13.0,81.5243,0.3133,649.0,-0.0465,0.0046
+A. Smurfs land exactly on the median,1,2,02%,random below median,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,638.0,-0.0481,0.0282
+C. Smurfs land anywhere above the median,1,2,02%,random below median,drawn from the upper half,1946.775,Platinum I 46 LP,36.775,82.0973,0.8863,661.075,-0.0642,-0.0491
+"random below median, their lobby level",0,2,02%,random below median,their lobby level,1915.5,Platinum I 15 LP,5.5,81.3435,0.1325,639.9375,-0.04,0.014
+"deepest first, exactly the median",0,2,02%,deepest first,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,630.75,0.252,0.04
+"deepest first, drawn from the upper half",0,2,02%,deepest first,drawn from the upper half,1946.75,Platinum I 46 LP,36.75,82.0967,0.8857,653.8125,0.2279,-0.0385
+"deepest first, their lobby level",0,2,02%,deepest first,their lobby level,1910.0,Platinum I 10 LP,0.0,81.211,0.0,638.0,0.0013,0.0282
+"most below own lobby, exactly the median",0,2,02%,most below own lobby,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,636.0,-0.0384,0.0314
+"most below own lobby, drawn from the upper half",0,2,02%,most below own lobby,drawn from the upper half,1946.925,Platinum I 46 LP,36.925,82.1009,0.8899,659.0375,-0.054,-0.0468
+B. Smurfs land at their own lobby level,1,2,02%,most below own lobby,their lobby level,1937.5,Platinum I 37 LP,27.5,81.8738,0.6628,657.75,-0.0549,-0.0232
+A. Smurfs land exactly on the median,1,3,03%,random below median,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,634.75,-0.0557,0.0335
+C. Smurfs land anywhere above the median,1,3,03%,random below median,drawn from the upper half,1961.95,Platinum I 61 LP,51.95,82.463,1.252,665.05,-0.0811,-0.0794
+"random below median, their lobby level",0,3,03%,random below median,their lobby level,1918.0375,Platinum I 18 LP,8.0375,81.4047,0.1937,641.3375,-0.0437,0.0082
+"deepest first, exactly the median",0,3,03%,deepest first,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,619.0,0.3163,0.0598
+"deepest first, drawn from the upper half",0,3,03%,deepest first,drawn from the upper half,1962.35,Platinum I 62 LP,52.35,82.4726,1.2616,649.425,0.281,-0.0574
+"deepest first, their lobby level",0,3,03%,deepest first,their lobby level,1910.0,Platinum I 10 LP,0.0,81.211,0.0,638.0,0.0207,0.0282
+"most below own lobby, exactly the median",0,3,03%,most below own lobby,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,628.0,-0.0422,0.0446
+"most below own lobby, drawn from the upper half",0,3,03%,most below own lobby,drawn from the upper half,1962.2,Platinum I 62 LP,52.2,82.469,1.258,658.1125,-0.063,-0.0703
+B. Smurfs land at their own lobby level,1,3,03%,most below own lobby,their lobby level,1949.0,Platinum I 49 LP,39.0,82.1509,0.9399,657.0,-0.0639,-0.0441
+A. Smurfs land exactly on the median,1,4,04%,random below median,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,628.95,-0.0642,0.043
+C. Smurfs land anywhere above the median,1,4,04%,random below median,drawn from the upper half,1992.525,Platinum I 92 LP,82.525,83.1999,1.9889,666.85,-0.0949,-0.1481
+"random below median, their lobby level",0,4,04%,random below median,their lobby level,1921.8125,Platinum I 21 LP,11.8125,81.4957,0.2847,642.525,-0.0479,-0.0017
+"deepest first, exactly the median",0,4,04%,deepest first,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,611.0,0.3676,0.0736
+"deepest first, drawn from the upper half",0,4,04%,deepest first,drawn from the upper half,1992.875,Platinum I 92 LP,82.875,83.2083,1.9973,649.6625,0.315,-0.1264
+"deepest first, their lobby level",0,4,04%,deepest first,their lobby level,1910.5,Platinum I 10 LP,0.5,81.2231,0.0121,638.75,0.0345,0.0278
+"most below own lobby, exactly the median",0,4,04%,most below own lobby,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,620.75,-0.0494,0.0568
+"most below own lobby, drawn from the upper half",0,4,04%,most below own lobby,drawn from the upper half,1994.2,Platinum I 94 LP,84.2,83.2402,2.0292,660.275,-0.0801,-0.1418
+B. Smurfs land at their own lobby level,1,4,04%,most below own lobby,their lobby level,1956.5,Platinum I 56 LP,46.5,82.3316,1.1206,655.375,-0.0765,-0.0544
+A. Smurfs land exactly on the median,1,5,05%,random below median,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,620.5875,-0.0689,0.0571
+C. Smurfs land anywhere above the median,1,5,05%,random below median,drawn from the upper half,2000.0,Emerald IV 0 LP,90.0,83.38,2.169,665.7875,-0.1123,-0.1479
+"random below median, their lobby level",0,5,05%,random below median,their lobby level,1924.4625,Platinum I 24 LP,14.4625,81.5595,0.3485,643.8312,-0.0503,-0.0079
+"deepest first, exactly the median",0,5,05%,deepest first,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,598.0,0.4117,0.097
+"deepest first, drawn from the upper half",0,5,05%,deepest first,drawn from the upper half,2000.0,Emerald IV 0 LP,90.0,83.38,2.169,642.9125,0.3389,-0.1199
+"deepest first, their lobby level",0,5,05%,deepest first,their lobby level,1911.0,Platinum I 11 LP,1.0,81.2351,0.0241,639.0,0.0461,0.0266
+"most below own lobby, exactly the median",0,5,05%,most below own lobby,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,617.0,-0.0574,0.0632
+"most below own lobby, drawn from the upper half",0,5,05%,most below own lobby,drawn from the upper half,2000.0,Emerald IV 0 LP,90.0,83.38,2.169,663.25,-0.0968,-0.1429
+B. Smurfs land at their own lobby level,1,5,05%,most below own lobby,their lobby level,1970.0,Platinum I 70 LP,60.0,82.657,1.446,654.75,-0.0863,-0.0752
+A. Smurfs land exactly on the median,1,6,06%,random below median,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,617.4375,-0.0786,0.0625
+C. Smurfs land anywhere above the median,1,6,06%,random below median,drawn from the upper half,2000.0,Emerald IV 0 LP,90.0,83.38,2.169,671.1625,-0.122,-0.1293
+"random below median, their lobby level",0,6,06%,random below median,their lobby level,1927.6,Platinum I 27 LP,17.6,81.6352,0.4242,644.2875,-0.0549,-0.0169
+"deepest first, exactly the median",0,6,06%,deepest first,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,584.0,0.4496,0.1233
+"deepest first, drawn from the upper half",0,6,06%,deepest first,drawn from the upper half,2000.0,Emerald IV 0 LP,90.0,83.38,2.169,639.4,0.3632,-0.0823
+"deepest first, their lobby level",0,6,06%,deepest first,their lobby level,1911.0,Platinum I 11 LP,1.0,81.2351,0.0241,639.0,0.0527,0.0266
+"most below own lobby, exactly the median",0,6,06%,most below own lobby,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,610.0,-0.0665,0.0754
+"most below own lobby, drawn from the upper half",0,6,06%,most below own lobby,drawn from the upper half,2000.0,Emerald IV 0 LP,90.0,83.38,2.169,664.1375,-0.1115,-0.1203
+B. Smurfs land at their own lobby level,1,6,06%,most below own lobby,their lobby level,1984.0,Platinum I 84 LP,74.0,82.9944,1.7834,654.75,-0.0989,-0.1119
+A. Smurfs land exactly on the median,1,7,07%,random below median,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,609.2875,-0.0841,0.0767
+C. Smurfs land anywhere above the median,1,7,07%,random below median,drawn from the upper half,2001.275,Emerald IV 1 LP,91.275,83.4439,2.2329,671.1125,-0.1382,-0.1123
+"random below median, their lobby level",0,7,07%,random below median,their lobby level,1930.0375,Platinum I 30 LP,20.0375,81.6939,0.4829,644.5312,-0.0574,-0.0238
+"deepest first, exactly the median",0,7,07%,deepest first,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,573.0,0.4853,0.1449
+"deepest first, drawn from the upper half",0,7,07%,deepest first,drawn from the upper half,2001.35,Emerald IV 1 LP,91.35,83.4476,2.2366,634.8,0.3773,-0.0597
+"deepest first, their lobby level",0,7,07%,deepest first,their lobby level,1912.0,Platinum I 12 LP,2.0,81.2592,0.0482,639.0,0.0573,0.0235
+"most below own lobby, exactly the median",0,7,07%,most below own lobby,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,600.0,-0.0725,0.0933
+"most below own lobby, drawn from the upper half",0,7,07%,most below own lobby,drawn from the upper half,2001.475,Emerald IV 1 LP,91.475,83.4539,2.2429,661.575,-0.1307,-0.0988
+B. Smurfs land at their own lobby level,1,7,07%,most below own lobby,their lobby level,2000.0,Emerald IV 0 LP,90.0,83.38,2.169,652.75,-0.1055,-0.1543
+A. Smurfs land exactly on the median,1,8,08%,random below median,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,600.65,-0.0939,0.0922
+C. Smurfs land anywhere above the median,1,8,08%,random below median,drawn from the upper half,2007.125,Emerald IV 7 LP,97.125,83.737,2.526,667.4125,-0.1543,-0.1093
+"random below median, their lobby level",0,8,08%,random below median,their lobby level,1935.0,Platinum I 35 LP,25.0,81.8135,0.6025,645.375,-0.0613,-0.0361
+"deepest first, exactly the median",0,8,08%,deepest first,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,560.0,0.5217,0.1714
+"deepest first, drawn from the upper half",0,8,08%,deepest first,drawn from the upper half,2007.05,Emerald IV 7 LP,97.05,83.7332,2.5222,627.5375,0.3932,-0.0487
+"deepest first, their lobby level",0,8,08%,deepest first,their lobby level,1913.5,Platinum I 13 LP,3.5,81.2953,0.0844,638.0,0.0611,0.0204
+"most below own lobby, exactly the median",0,8,08%,most below own lobby,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,592.0,-0.0803,0.1081
+"most below own lobby, drawn from the upper half",0,8,08%,most below own lobby,drawn from the upper half,2007.4,Emerald IV 7 LP,97.4,83.7507,2.5397,659.5125,-0.1478,-0.096
+B. Smurfs land at their own lobby level,1,8,08%,most below own lobby,their lobby level,2000.0,Emerald IV 0 LP,90.0,83.38,2.169,646.875,-0.1128,-0.1467
+A. Smurfs land exactly on the median,1,9,09%,random below median,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,592.8875,-0.0978,0.1065
+C. Smurfs land anywhere above the median,1,9,09%,random below median,drawn from the upper half,2013.75,Emerald IV 13 LP,103.75,84.0689,2.8579,667.1125,-0.1725,-0.1036
+"random below median, their lobby level",0,9,09%,random below median,their lobby level,1939.6625,Platinum I 39 LP,29.6625,81.9259,0.7149,644.5562,-0.0659,-0.0466
+"deepest first, exactly the median",0,9,09%,deepest first,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,545.0,0.5584,0.2037
+"deepest first, drawn from the upper half",0,9,09%,deepest first,drawn from the upper half,2013.7,Emerald IV 13 LP,103.7,84.0664,2.8554,621.2375,0.4122,-0.0325
+"deepest first, their lobby level",0,9,09%,deepest first,their lobby level,1914.0,Platinum I 14 LP,4.0,81.3074,0.0964,637.0,0.0627,0.0204
+"most below own lobby, exactly the median",0,9,09%,most below own lobby,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,582.0,-0.0908,0.1271
+"most below own lobby, drawn from the upper half",0,9,09%,most below own lobby,drawn from the upper half,2013.45,Emerald IV 13 LP,103.45,84.0538,2.8428,656.0125,-0.1666,-0.0898
+B. Smurfs land at their own lobby level,1,9,09%,most below own lobby,their lobby level,2000.0,Emerald IV 0 LP,90.0,83.38,2.169,641.0,-0.123,-0.1388
+A. Smurfs land exactly on the median,1,10,10%,random below median,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,581.7125,-0.1002,0.1277
+C. Smurfs land anywhere above the median,1,10,10%,random below median,drawn from the upper half,2018.7,Emerald IV 18 LP,108.7,84.3169,3.1059,667.375,-0.1811,-0.0879
+"random below median, their lobby level",0,10,10%,random below median,their lobby level,1942.575,Platinum I 42 LP,32.575,81.9961,0.7851,643.15,-0.068,-0.0535
+"deepest first, exactly the median",0,10,10%,deepest first,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,532.0,0.5955,0.2331
+"deepest first, drawn from the upper half",0,10,10%,deepest first,drawn from the upper half,2018.75,Emerald IV 18 LP,108.75,84.3194,3.1084,617.0,0.4306,-0.0138
+"deepest first, their lobby level",0,10,10%,deepest first,their lobby level,1914.0,Platinum I 14 LP,4.0,81.3074,0.0964,634.0,0.0646,0.0252
+"most below own lobby, exactly the median",0,10,10%,most below own lobby,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,571.0,-0.0976,0.1489
+"most below own lobby, drawn from the upper half",0,10,10%,most below own lobby,drawn from the upper half,2018.725,Emerald IV 18 LP,108.725,84.3181,3.1071,655.8,-0.1828,-0.0727
+B. Smurfs land at their own lobby level,1,10,10%,most below own lobby,their lobby level,2000.0,Emerald IV 0 LP,90.0,83.38,2.169,637.0,-0.1271,-0.1334
+A. Smurfs land exactly on the median,1,12,12%,random below median,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,562.15,-0.1113,0.167
+C. Smurfs land anywhere above the median,1,12,12%,random below median,drawn from the upper half,2031.8,Emerald IV 31 LP,121.8,84.9732,3.7622,656.35,-0.2106,-0.0824
+"random below median, their lobby level",0,12,12%,random below median,their lobby level,1947.6875,Platinum I 47 LP,37.6875,82.1193,0.9083,640.4156,-0.0757,-0.0588
+"deepest first, exactly the median",0,12,12%,deepest first,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,508.0,0.6682,0.2913
+"deepest first, drawn from the upper half",0,12,12%,deepest first,drawn from the upper half,2031.6,Emerald IV 31 LP,121.6,84.9632,3.7522,602.2125,0.4578,-0.0017
+"deepest first, their lobby level",0,12,12%,deepest first,their lobby level,1915.0,Platinum I 15 LP,5.0,81.3315,0.1205,629.0,0.0646,0.0302
+"most below own lobby, exactly the median",0,12,12%,most below own lobby,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,547.0,-0.1176,0.1993
+"most below own lobby, drawn from the upper half",0,12,12%,most below own lobby,drawn from the upper half,2031.45,Emerald IV 31 LP,121.45,84.9556,3.7446,641.1375,-0.2221,-0.062
+B. Smurfs land at their own lobby level,1,12,12%,most below own lobby,their lobby level,2000.0,Emerald IV 0 LP,90.0,83.38,2.169,627.0,-0.1434,-0.1196
+A. Smurfs land exactly on the median,1,14,14%,random below median,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,535.6625,-0.1133,0.2247
+C. Smurfs land anywhere above the median,1,14,14%,random below median,drawn from the upper half,2041.55,Emerald IV 41 LP,131.55,85.4617,4.2507,640.725,-0.2395,-0.0568
+"random below median, their lobby level",0,14,14%,random below median,their lobby level,1950.775,Platinum I 50 LP,40.775,82.1937,0.9827,639.0438,-0.0837,-0.0612
+"deepest first, exactly the median",0,14,14%,deepest first,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,483.0,0.7451,0.3582
+"deepest first, drawn from the upper half",0,14,14%,deepest first,drawn from the upper half,2042.3,Emerald IV 42 LP,132.3,85.4992,4.2882,590.2875,0.4986,0.0266
+"deepest first, their lobby level",0,14,14%,deepest first,their lobby level,1916.25,Platinum I 16 LP,6.25,81.3616,0.1506,623.0,0.0607,0.0393
+"most below own lobby, exactly the median",0,14,14%,most below own lobby,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,522.75,-0.1389,0.2549
+"most below own lobby, drawn from the upper half",0,14,14%,most below own lobby,drawn from the upper half,2041.85,Emerald IV 41 LP,131.85,85.4767,4.2657,629.8,-0.2611,-0.0372
+B. Smurfs land at their own lobby level,1,14,14%,most below own lobby,their lobby level,2000.0,Emerald IV 0 LP,90.0,83.38,2.169,615.75,-0.1561,-0.1035
+A. Smurfs land exactly on the median,1,16,16%,random below median,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,510.0125,-0.1139,0.2863
+C. Smurfs land anywhere above the median,1,16,16%,random below median,drawn from the upper half,2056.375,Emerald IV 56 LP,146.375,86.2044,4.9934,623.725,-0.2669,-0.0565
+"random below median, their lobby level",0,16,16%,random below median,their lobby level,1953.8,Platinum I 53 LP,43.8,82.2666,1.0556,635.7125,-0.0875,-0.0606
+"deepest first, exactly the median",0,16,16%,deepest first,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,454.0,0.8254,0.4449
+"deepest first, drawn from the upper half",0,16,16%,deepest first,drawn from the upper half,2056.625,Emerald IV 56 LP,146.625,86.2169,5.0059,566.3,0.5206,0.0372
+"deepest first, their lobby level",0,16,16%,deepest first,their lobby level,1921.0,Platinum I 21 LP,11.0,81.4761,0.2651,622.0,0.052,0.0322
+"most below own lobby, exactly the median",0,16,16%,most below own lobby,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,498.0,-0.1583,0.3173
+"most below own lobby, drawn from the upper half",0,16,16%,most below own lobby,drawn from the upper half,2056.2,Emerald IV 56 LP,146.2,86.1956,4.9846,610.6875,-0.3019,-0.0356
+B. Smurfs land at their own lobby level,1,16,16%,most below own lobby,their lobby level,2002.5,Emerald IV 2 LP,92.5,83.5053,2.2943,609.0,-0.1633,-0.1018
+A. Smurfs land exactly on the median,1,18,18%,random below median,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,480.7125,-0.1223,0.3647
+C. Smurfs land anywhere above the median,1,18,18%,random below median,drawn from the upper half,2069.025,Emerald IV 69 LP,159.025,86.8382,5.6272,601.975,-0.2874,-0.0364
+"random below median, their lobby level",0,18,18%,random below median,their lobby level,1961.425,Platinum I 61 LP,51.425,82.4503,1.2393,634.5187,-0.0955,-0.0782
+"deepest first, exactly the median",0,18,18%,deepest first,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,424.75,0.9087,0.5444
+"deepest first, drawn from the upper half",0,18,18%,deepest first,drawn from the upper half,2068.75,Emerald IV 68 LP,158.75,86.8244,5.6134,545.925,0.547,0.064
+"deepest first, their lobby level",0,18,18%,deepest first,their lobby level,1925.0,Platinum I 25 LP,15.0,81.5725,0.3615,616.875,0.0431,0.031
+"most below own lobby, exactly the median",0,18,18%,most below own lobby,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,467.75,-0.1775,0.4025
+"most below own lobby, drawn from the upper half",0,18,18%,most below own lobby,drawn from the upper half,2069.0,Emerald IV 69 LP,159.0,86.8369,5.6259,588.5625,-0.3393,-0.0152
+B. Smurfs land at their own lobby level,1,18,18%,most below own lobby,their lobby level,2004.0,Emerald IV 4 LP,94.0,83.5804,2.3694,603.0,-0.1676,-0.0978
+A. Smurfs land exactly on the median,1,20,20%,random below median,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,444.8375,-0.1207,0.4748
+C. Smurfs land anywhere above the median,1,20,20%,random below median,drawn from the upper half,2081.15,Emerald IV 81 LP,171.15,87.4456,6.2346,577.875,-0.3168,-0.001
+"random below median, their lobby level",0,20,20%,random below median,their lobby level,1969.5375,Platinum I 69 LP,59.5375,82.6459,1.4349,635.4688,-0.1022,-0.0959
+"deepest first, exactly the median",0,20,20%,deepest first,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,397.75,0.9943,0.6493
+"deepest first, drawn from the upper half",0,20,20%,deepest first,drawn from the upper half,2082.675,Emerald IV 82 LP,172.675,87.522,6.311,531.1625,0.6023,0.0872
+"deepest first, their lobby level",0,20,20%,deepest first,their lobby level,1927.0,Platinum I 27 LP,17.0,81.6207,0.4097,609.5,0.0327,0.0369
+"most below own lobby, exactly the median",0,20,20%,most below own lobby,exactly the median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,433.75,-0.1962,0.5124
+"most below own lobby, drawn from the upper half",0,20,20%,most below own lobby,drawn from the upper half,2082.075,Emerald IV 82 LP,172.075,87.492,6.281,566.6375,-0.3903,0.0194
+B. Smurfs land at their own lobby level,1,20,20%,most below own lobby,their lobby level,2005.0,Emerald IV 5 LP,95.0,83.6305,2.4195,596.0,-0.1701,-0.0906
+Upper bound: every smurf lands above the new median,1,0,00%,any,above the new median,1910.0,Platinum I 10 LP,0.0,81.211,0.0,,,
+Upper bound: every smurf lands above the new median,1,1,01%,any,above the new median,1926.75,Platinum I 26 LP,16.75,81.6147,0.4037,,,
+Upper bound: every smurf lands above the new median,1,2,02%,any,above the new median,1948.0,Platinum I 48 LP,38.0,82.1268,0.9158,,,
+Upper bound: every smurf lands above the new median,1,3,03%,any,above the new median,1967.0,Platinum I 67 LP,57.0,82.5847,1.3737,,,
+Upper bound: every smurf lands above the new median,1,4,04%,any,above the new median,2000.0,Emerald IV 0 LP,90.0,83.38,2.169,,,
+Upper bound: every smurf lands above the new median,1,5,05%,any,above the new median,2000.0,Emerald IV 0 LP,90.0,83.38,2.169,,,
+Upper bound: every smurf lands above the new median,1,6,06%,any,above the new median,2000.0,Emerald IV 0 LP,90.0,83.38,2.169,,,
+Upper bound: every smurf lands above the new median,1,7,07%,any,above the new median,2008.0,Emerald IV 8 LP,98.0,83.7808,2.5698,,,
+Upper bound: every smurf lands above the new median,1,8,08%,any,above the new median,2017.0,Emerald IV 17 LP,107.0,84.2317,3.0207,,,
+Upper bound: every smurf lands above the new median,1,9,09%,any,above the new median,2023.0,Emerald IV 23 LP,113.0,84.5323,3.3213,,,
+Upper bound: every smurf lands above the new median,1,10,10%,any,above the new median,2035.0,Emerald IV 35 LP,125.0,85.1335,3.9225,,,
+Upper bound: every smurf lands above the new median,1,11,11%,any,above the new median,2043.0,Emerald IV 43 LP,133.0,85.5343,4.3233,,,
+Upper bound: every smurf lands above the new median,1,12,12%,any,above the new median,2055.0,Emerald IV 55 LP,145.0,86.1355,4.9245,,,
+Upper bound: every smurf lands above the new median,1,13,13%,any,above the new median,2066.0,Emerald IV 66 LP,156.0,86.6866,5.4756,,,
+Upper bound: every smurf lands above the new median,1,14,14%,any,above the new median,2079.0,Emerald IV 79 LP,169.0,87.3379,6.1269,,,
+Upper bound: every smurf lands above the new median,1,15,15%,any,above the new median,2090.0,Emerald IV 90 LP,180.0,87.889,6.678,,,
+Upper bound: every smurf lands above the new median,1,16,16%,any,above the new median,2105.0,Emerald III 5 LP,195.0,88.519,7.308,,,
+Upper bound: every smurf lands above the new median,1,17,17%,any,above the new median,2117.0,Emerald III 17 LP,207.0,88.8286,7.6176,,,
+Upper bound: every smurf lands above the new median,1,18,18%,any,above the new median,2129.0,Emerald III 29 LP,219.0,89.1382,7.9272,,,
+Upper bound: every smurf lands above the new median,1,19,19%,any,above the new median,2144.0,Emerald III 44 LP,234.0,89.5252,8.3142,,,
+Upper bound: every smurf lands above the new median,1,20,20%,any,above the new median,2158.0,Emerald III 58 LP,248.0,89.8864,8.6754,,,
