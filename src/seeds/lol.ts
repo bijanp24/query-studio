@@ -208,12 +208,12 @@ export function lolWorkspace(): Workspace {
   ];
 
   fields.push(
-    D('smurf_tests', 'case_name', 'case'), D('smurf_tests', 'evidence', 'evidence'), D('smurf_tests', 'observed', 'observed'), D('smurf_tests', 'favours', 'favours'), D('smurf_tests', 'basis', 'basis (data or assumed)'),
+    D('smurf_tests', 'case_name', 'case'), D('smurf_tests', 'test', 'test (smurf or shared account)'), D('smurf_tests', 'evidence', 'evidence'), D('smurf_tests', 'observed', 'observed'), D('smurf_tests', 'favours', 'favours'), D('smurf_tests', 'basis', 'basis (data or assumed)'),
     F('smurf_tests', 'log10_lr', 'evidence weight (log10 likelihood ratio, + = smurf)', { agg: 'sum', format: 'decimal2', additivity: 'additive', polarity: 'neutral', description: 'log10 of P(e | smurf) / P(e | not a smurf). +1 = ten times likelier if a smurf, -1 = ten times likelier if not. Sums across independent items.' }),
     F('smurf_tests', 'likelihood_ratio', 'likelihood ratio (smurf : not)', { agg: 'max', format: 'decimal2', polarity: 'neutral' }),
     F('smurf_tests', 'p_value_if_not_smurf', 'p-value if NOT a smurf', { agg: 'min', format: 'decimal2', polarity: 'neutral', description: 'How often a player who plays at their shown rank shows evidence at least this smurf-like. Below 0.05 rejects "not a smurf" on this item.' }),
     F('smurf_tests', 'p_value_if_smurf', 'p-value if a smurf', { agg: 'min', format: 'decimal2', polarity: 'neutral', description: 'How often a smurf shows evidence at least this un-smurf-like. Below 0.05 rejects "smurf" on this item.' }),
-    D('smurf_test_summary', 'case_name', 'case'), D('smurf_test_summary', 'shown_rank', 'shown rank'), D('smurf_test_summary', 'not_smurf_hypothesis', 'assume NOT a smurf'), D('smurf_test_summary', 'smurf_hypothesis', 'assume a smurf'),
+    D('smurf_test_summary', 'case_name', 'case'), D('smurf_test_summary', 'shown_rank', 'shown rank'), D('smurf_test_summary', 'not_smurf_hypothesis', 'assume NOT a smurf'), D('smurf_test_summary', 'smurf_hypothesis', 'assume a smurf'), D('smurf_test_summary', 'shared_account', 'shared account (one person vs two)'),
     F('smurf_test_summary', 'p_if_not_smurf', 'combined p if NOT a smurf', { agg: 'min', format: 'decimal2', polarity: 'neutral' }),
     F('smurf_test_summary', 'p_if_smurf', 'combined p if a smurf', { agg: 'min', format: 'decimal2', polarity: 'neutral' }),
     F('smurf_test_summary', 'bayes_factor', 'Bayes factor (smurf : not)', { agg: 'max', format: 'decimal2', polarity: 'neutral' }),
@@ -344,14 +344,14 @@ export function lolWorkspace(): Workspace {
     V({ id: 'v_my_rank_profile', name: 'My rank: baseline, consistency, peak, trend', queryId: 'q_my_rank', type: 'profile', color: 3, width: 3, window: 3, per: 10, note: 'Over the rank snapshots of the main account. Peak = the best 3 snapshots in a row; trend = change per 10 snapshots.' }),
     V({ id: 'v_my_rank_ribbon', name: 'My rank: rolling baseline and spread', queryId: 'q_my_rank', type: 'ribbon', color: 3, width: 3, window: 3 }),
   ];
-  const SUSPECT: Filter[] = [{ field: 'case_name', op: 'contains', value: 'API pull' }];
+  const SUSPECT: Filter[] = [{ field: 'case_name', op: 'contains', value: 'API pull' }, { field: 'test', op: '=', value: 'smurf' }];
   const HEADLINE: Filter[] = [{ field: 'headline', op: '=', value: '1' }];
   queries.push(
     Q({ id: 'q_st_summary', name: 'Smurf test: both hypotheses, every investigated player', dataset: 'smurf_test_summary', last: 0, followDashboard: false,
       measures: [{ field: 'p_if_not_smurf' }, { field: 'p_if_smurf' }, { field: 'bayes_factor' }, { field: 'posterior_smurf' }, { field: 'posterior_even_odds' }],
-      groupBy: [{ field: 'case_name' }, { field: 'shown_rank' }] }),
+      groupBy: [{ field: 'case_name' }, { field: 'shown_rank' }, { field: 'shared_account' }] }),
     Q({ id: 'q_st_evidence', name: 'Smurf test: evidence, tested both ways', dataset: 'smurf_tests', last: 0,
-      measures: [{ field: 'log10_lr' }, { field: 'p_value_if_not_smurf' }, { field: 'p_value_if_smurf' }], groupBy: [{ field: 'case_name' }, { field: 'evidence' }] }),
+      measures: [{ field: 'log10_lr' }, { field: 'p_value_if_not_smurf' }, { field: 'p_value_if_smurf' }], groupBy: [{ field: 'case_name' }, { field: 'test' }, { field: 'evidence' }] }),
     Q({ id: 'q_st_weight', name: 'Smurf test: which way each piece of evidence points (Oct 22 suspect, API pull)', dataset: 'smurf_tests', last: 0, filters: SUSPECT,
       measures: m('log10_lr'), groupBy: [{ field: 'evidence' }] }),
     Q({ id: 'q_sm_sweep', name: 'Smurfs and the median: how far the median moves', dataset: 'smurf_sweep', last: 0, filters: [...HEADLINE, { field: 'smurf_share_pct', op: 'in', value: '0,1,2,3,4,5,6,7,8,9,10,12,14,16,18,20' }], sort: 'key_asc',
@@ -368,7 +368,7 @@ export function lolWorkspace(): Workspace {
       measures: m('rank_points'), groupBy: [{ field: 'slot' }, { field: 'scenario' }] }),
   );
   vizs.push(
-    V({ id: 'v_st_summary', name: 'Smurf or not: both hypotheses tested', queryId: 'q_st_summary', type: 'table', width: 6, note: 'p if NOT a smurf below 0.05 rejects "plays at their shown rank"; p if a smurf below 0.05 rejects "smurf". Neither rejected = the evidence cannot decide. The Bayes factor multiplies the items as if independent, which overstates certainty. The 9% prior is the share quoted from Riot.' }),
+    V({ id: 'v_st_summary', name: 'Smurf or not: both hypotheses tested', queryId: 'q_st_summary', type: 'table', width: 6, note: 'p if NOT a smurf below 0.05 rejects "plays at their shown rank"; p if a smurf below 0.05 rejects "smurf". Neither rejected = the evidence cannot decide. The Bayes factor multiplies the items as if independent, which overstates certainty. The 9% prior is the share quoted from Riot. Shared account is a separate test: one person on the account vs a second person (a booster) playing the main champion, judged by whether back-to-back games switch between the main champion and the rest.' }),
     V({ id: 'v_st_weight', name: 'Which way the evidence points: Oct 22 suspect', queryId: 'q_st_weight', type: 'bar', color: 8, width: 6, note: 'Right of zero favours a smurf, left favours not a smurf. +1 = ten times likelier if a smurf. From the Riot API pull: 37 Ranked Solo games, rank today. The op.gg snapshot row in the tables is kept for comparison.' }),
     V({ id: 'v_st_evidence', name: 'Every piece of evidence, tested both ways', queryId: 'q_st_evidence', type: 'table', width: 6 }),
     V({ id: 'v_sm_sweep', name: 'If smurfs below the median were shown at their true rank, how far would the median move?', queryId: 'q_sm_sweep', type: 'column', color: 1, width: 6, note: 'Rank points (100 = one division) added to the median rank of the players met (Plat I 10 LP today), by the share of all players met who are smurfs from below the median. A leaves the median where it is; the upper bound is the most any share can move it.' }),
