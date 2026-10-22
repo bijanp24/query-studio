@@ -7,7 +7,7 @@ import { fmt, matchFilters, measureFn, pointsOf, reference, seriesOf, WEEKDAY_OR
 import { fieldExpr, fieldsFor, missingColumns, resolveMeasure, type ResolvedMeasure } from '../../core/semantic';
 import { ols, welch, mean, quantile } from '../../core/stats';
 import { compile, evaluate, toNum } from '../../core/expr';
-import { distribution, ordinal, type BinCount, type DistSummary } from '../../core/distribution';
+import { distribution, hiddenRange, ordinal, type BinCount, type DistSummary } from '../../core/distribution';
 import { flowOf, type FlowSummary } from '../../core/flow';
 import { profileOf, type Profile } from '../../core/profile';
 
@@ -334,6 +334,7 @@ export function distOf(v: Visualization, res: Result, cat: Catalog): { d: DistSu
 
 function Distribution({ v, res, cat }: { v: Visualization; res: Result; cat: Catalog }) {
   const { d, label, msg } = distOf(v, res, cat);
+  const [share, setShare] = React.useState<number | null>(null);
   if (!d) return <Empty msg={msg || 'No rows match this query.'} />;
   const hasRef = d.refTotal > 0;
   const W = useW(), H = 230, pl = 40, pr = 8, pt = 12, pb = 56;
@@ -365,8 +366,20 @@ function Distribution({ v, res, cat }: { v: Visualization; res: Result; cat: Cat
       <div><div className="k">Peak (most common)</div><div className="v">{d.mode.key}</div><div className="small muted">{pct(d.mode.share)} of {g}s{hasRef ? `, ${pct(d.mode.refShare)} of ${label}` : ''}</div></div>
       {hasRef && <div><div className="k">Against {label}</div><div className="v">{d.shift == null ? '—' : `${d.shift >= 0 ? '+' : ''}${d.shift.toFixed(0)} pts`}</div><div className="small muted">{d.superiority == null ? '' : `ranks higher ${(d.superiority * 100).toFixed(0)}% of the time`}</div></div>}
     </div>
+    {v.hidden && <Hidden d={d} label={label} g={g} what={v.hidden.label || 'hidden'} share={share ?? v.hidden.share} setShare={setShare} />}
     {(W >= 700 || !hasRef || msg) && <div className="small muted">{!hasRef ? 'Pick a reference dataset to compare this distribution with a population.' : W >= 700 ? `Shift: the median's percentile in ${label} minus 50. "Ranks higher" is the chance that a random ${g} here sits in a higher bin than a random member of ${label}, ties counted half; 50% would be no difference. Percentiles inside a bin are interpolated.` : ''}{msg ? ' ' + msg : ''}</div>}
   </>;
+}
+
+/** What if part of the group is shown below its median but belongs above it: the range the median can move. */
+function Hidden({ d, label, g, what, share, setShare }: { d: DistSummary; label: string; g: string; what: string; share: number; setShare: (x: number) => void }) {
+  const r = hiddenRange(d, share / 100);
+  const at = (x: number | null) => x == null ? '' : ordinal(x);
+  const moved = r.high.bin.key !== r.low.bin.key || (r.high.refPct != null && r.low.refPct != null && r.high.refPct - r.low.refPct >= 0.5);
+  return <div className="hidden-whatif">
+    <label className="inline small">If <input type="range" min={0} max={30} step={1} value={share} onChange={e => setShare(Number(e.target.value))} aria-label={`share of ${g}s who are ${what}`} /> <b>{share}%</b> of these {g}s are {what} shown below the median</label>
+    <div className="small">the median stays at <b>{r.low.bin.key}</b>{r.low.refPct != null ? ` (${at(r.low.refPct)} percentile of ${label})` : ''} if they belong exactly at it, and rises at most to <b>{r.high.bin.key}</b>{r.high.refPct != null ? ` (${at(r.high.refPct)})` : ''} if all of them belong above it{moved ? '' : ': no visible change at this share'}.</div>
+  </div>;
 }
 
 function Scatter({ v, res, cat }: { v: Visualization; res: Result; cat: Catalog }) {

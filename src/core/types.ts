@@ -261,6 +261,9 @@ export interface Visualization {
   per?: number;
   /** distribution: the reference population. */
   dist?: DistReference;
+  /** distribution: what if this share (0 to 50, percent) of the group is shown below its median but
+   *  belongs above it, such as smurfs among the players met. The tile shows the range the median can move. */
+  hidden?: { share: number; label?: string };
 }
 
 export interface Tile { id: string; vizId: string; width?: 2 | 3 | 4 | 6 }

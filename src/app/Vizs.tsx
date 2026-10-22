@@ -76,6 +76,8 @@ function DistEditor({ v, set }: { v: Visualization; set: (p: Partial<Visualizati
       <Row label="Reference label"><Txt value={d.label} onChange={x => setD({ label: x || undefined })} placeholder={ws.datasets.find(x => x.id === d.dataset)?.name} /></Row>
       <Row label="Reference filters"><FiltersEditor filters={d.filters || []} onChange={f => setD({ filters: f })} fields={rf} showHidden={showHidden} /></Row>
     </>}
+    <Row label="Hidden share (%)" hint="What if this share of the group is shown below its median but belongs above it, such as smurfs among the players you meet. The tile shows how far the median can move. Empty: off."><Num className="n8" value={v.hidden?.share} min={0} max={50} onChange={x => set({ hidden: x == null ? undefined : { ...v.hidden, share: x } })} /></Row>
+    {v.hidden && <Row label="Call them"><Txt value={v.hidden.label} onChange={x => set({ hidden: { ...v.hidden!, label: x || undefined } })} placeholder="hidden" /></Row>}
   </>;
 }
 
