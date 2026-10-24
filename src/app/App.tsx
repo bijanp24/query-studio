@@ -18,6 +18,8 @@ import { Check, Sel, Txt, uid } from './ui';
 // The workspace a first visit opens: League on claude.ai, the field-trials example on static hosting,
 // where the League snapshot is not published.
 declare const __DEFAULT_WS__: string;
+// Static hosting also serves the phone-first Social page at /social/.
+declare const __PAGES__: boolean;
 const SEEDS: Record<string, () => Workspace> = { lol: lolWorkspace, fieldtrials: fieldTrialsWorkspace, reviews: reviewsWorkspace };
 interface RegEntry { id: string; name: string }
 const GUIDE_URL = 'https://github.com/bijanp24/query-studio/blob/main/docs/guide/README.md';
@@ -139,6 +141,7 @@ export function App() {
       <span className="grow" />
       <Check checked={showHidden} onChange={setShowHidden}>show hidden fields</Check>
       <span className={'saved small ' + saved}>{saved === 'saving' ? 'Saving…' : saved === 'saved' ? (store?.kind === 'account' ? 'Saved to your account' : store?.kind === 'browser' ? 'Saved in this browser' : 'Not saved') : saved === 'error' ? 'Could not save' : ''}</span>
+      {__PAGES__ && <a className="btnlink" href="social/" title="Phone-first cards for Instagram Reels and X">Social</a>}
       <a className="btnlink" href={GUIDE_URL} target="_blank" rel="noopener noreferrer" title="How to use Query Studio (opens in a new tab)">Guide</a>
       <button className="ghost" onClick={exportWs}>Export</button>
       {SEEDS[ws.id] ? <button className="ghost" onClick={resetSeed} title="Discard your changes to this example">Reset</button> : <button className="ghost" onClick={() => setMenu(menu === 'delete' ? null : 'delete')}>Delete</button>}

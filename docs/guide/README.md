@@ -20,7 +20,8 @@ Open it at **https://bijanp24.github.io/query-studio/**, or see [Where it runs](
    - [Read the smurf test](smurf-test.md): every investigated player tested both ways, and how hidden smurfs move the median.
    - [The mode: what is most common, then the next](mode.md): frequency ranking, peaks and what chance allows, for ranks or star ratings (review bombing).
    - [Track rank over time](rank-history.md): rank on the day you met each player and at fixed intervals after, for one player or everyone met.
-8. [Where it runs](where-it-runs.md): GitHub Pages, your own machine, and claude.ai, and where your work is saved.
+8. [Social: cards for Reels and X](social.md): a separate, phone-first page that turns the main analyses into share-ready images.
+9. [Where it runs](where-it-runs.md): GitHub Pages, your own machine, and claude.ai, and where your work is saved.
 
 ## The idea in one picture
 
