@@ -1,0 +1,295 @@
+{
+ "generated": "2026-10-24",
+ "rank": {
+  "players": 8938,
+  "ladderAccounts": 1680714,
+  "metMedian": "Platinum I",
+  "metMedianPct": 18.9,
+  "ladderMedian": "Gold IV",
+  "gapDivisions": 6.1,
+  "tiers": [
+   {
+    "label": "Iron",
+    "v": 0.2,
+    "ref": 4.1
+   },
+   {
+    "label": "Bronze",
+    "v": 1.1,
+    "ref": 16.7
+   },
+   {
+    "label": "Silver",
+    "v": 4.4,
+    "ref": 21.4
+   },
+   {
+    "label": "Gold",
+    "v": 19.8,
+    "ref": 23.5
+   },
+   {
+    "label": "Plat",
+    "v": 28.8,
+    "ref": 17.6
+   },
+   {
+    "label": "Emerald",
+    "v": 31.9,
+    "ref": 12.4
+   },
+   {
+    "label": "Diamond",
+    "v": 11.7,
+    "ref": 3.5
+   },
+   {
+    "label": "Master+",
+    "v": 2.2,
+    "ref": 0.7
+   }
+  ]
+ },
+ "sample": {
+  "effN": 1784,
+  "sims": 1000,
+  "beat": 1000,
+  "real": "Platinum I",
+  "lo": "Gold IV",
+  "hi": "Gold III",
+  "maxSim": "Gold III",
+  "gapDivisions": 5.8,
+  "hist": [
+   {
+    "label": "Gold IV",
+    "x": 1225,
+    "v": 2
+   },
+   {
+    "label": "Gold IV",
+    "x": 1250,
+    "v": 125
+   },
+   {
+    "label": "Gold IV",
+    "x": 1275,
+    "v": 615
+   },
+   {
+    "label": "Gold III",
+    "x": 1300,
+    "v": 234
+   },
+   {
+    "label": "Gold III",
+    "x": 1325,
+    "v": 24
+   }
+  ],
+  "realX": 1905
+ },
+ "mode": {
+  "top": [
+   {
+    "label": "Emerald IV",
+    "v": 11.7,
+    "ref": 5
+   },
+   {
+    "label": "Plat IV",
+    "v": 9.7,
+    "ref": 7.3
+   },
+   {
+    "label": "Emerald I",
+    "v": 7.7,
+    "ref": 3
+   },
+   {
+    "label": "Plat III",
+    "v": 7.4,
+    "ref": 4.4
+   },
+   {
+    "label": "Plat II",
+    "v": 7,
+    "ref": 3.6
+   },
+   {
+    "label": "Emerald III",
+    "v": 6.9,
+    "ref": 2.6
+   }
+  ],
+  "ladderMode": "Gold IV",
+  "modeTopPct": 11.6
+ },
+ "lobby": {
+  "account": "takinturrets",
+  "games": 101,
+  "lobbyPlayers": 1389,
+  "stats": [
+   {
+    "label": "CS / min",
+    "me": 6.98,
+    "lobby": 6.18,
+    "pct": 12.9,
+    "better": true,
+    "unit": "",
+    "dp": 2
+   },
+   {
+    "label": "Kill participation",
+    "me": 42,
+    "lobby": 45,
+    "pct": -7.3,
+    "better": false,
+    "unit": "%",
+    "dp": 0
+   },
+   {
+    "label": "Damage / min",
+    "me": 816,
+    "lobby": 741,
+    "pct": 10.2,
+    "better": true,
+    "unit": "",
+    "dp": 0
+   },
+   {
+    "label": "Gold / min",
+    "me": 441,
+    "lobby": 413,
+    "pct": 6.8,
+    "better": true,
+    "unit": "",
+    "dp": 0
+   },
+   {
+    "label": "Solo kills / game",
+    "me": 2.2,
+    "lobby": 1.3,
+    "pct": 69.4,
+    "better": true,
+    "unit": "",
+    "dp": 1
+   },
+   {
+    "label": "Deaths / game",
+    "me": 5.2,
+    "lobby": 6.4,
+    "pct": -19.5,
+    "better": true,
+    "unit": "",
+    "dp": 1
+   },
+   {
+    "label": "Vision / min",
+    "me": 0.47,
+    "lobby": 0.87,
+    "pct": -46.2,
+    "better": false,
+    "unit": "",
+    "dp": 2
+   }
+  ]
+ },
+ "farming": {
+  "byTier": [
+   {
+    "label": "Iron",
+    "v": 5.25
+   },
+   {
+    "label": "Bronze",
+    "v": 5.91
+   },
+   {
+    "label": "Silver",
+    "v": 6.27
+   },
+   {
+    "label": "Gold",
+    "v": 6.51
+   },
+   {
+    "label": "Plat",
+    "v": 6.73
+   },
+   {
+    "label": "Emerald",
+    "v": 6.93
+   },
+   {
+    "label": "Diamond",
+    "v": 7.19
+   }
+  ],
+  "wrByCs": [
+   {
+    "label": "5–5.5",
+    "v": 45.9,
+    "n": 95
+   },
+   {
+    "label": "5.5–6",
+    "v": 48,
+    "n": 229
+   },
+   {
+    "label": "6–6.5",
+    "v": 49.2,
+    "n": 386
+   },
+   {
+    "label": "6.5–7",
+    "v": 49.7,
+    "n": 426
+   },
+   {
+    "label": "7–7.5",
+    "v": 51.3,
+    "n": 299
+   },
+   {
+    "label": "7.5–8",
+    "v": 51.6,
+    "n": 123
+   }
+  ],
+  "players": 1648,
+  "games": 36499,
+  "mine": 7.16,
+  "myGames": 99
+ },
+ "reviews": {
+  "title": "Starfall Tactics",
+  "before": [
+   5.5,
+   4.4,
+   9.3,
+   27.9,
+   52.8
+  ],
+  "after": [
+   27.7,
+   6.1,
+   8.1,
+   24,
+   34.1
+  ],
+  "cleaned": [
+   8.4,
+   5.4,
+   10.5,
+   31.2,
+   44.4
+  ],
+  "nBefore": 4605,
+  "nAfter": 1113,
+  "nCleaned": 855,
+  "avgBefore": 4.18,
+  "avgAfter": 3.31,
+  "avgCleaned": 3.98
+ }
+}
