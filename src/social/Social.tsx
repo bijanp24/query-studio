@@ -73,7 +73,7 @@ export function Social() {
 
   return <div className="soc">
     <header className="bar">
-      <a className="mark" href="../" aria-label="Query Studio home">
+      <a className="mark" href="https://bijanp24.github.io/query-studio/" aria-label="Query Studio home">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="6" fill="currentColor" /><rect x="5.5" y="12" width="3" height="6.5" rx="1" className="cut" /><rect x="10.5" y="8.5" width="3" height="10" rx="1" className="cut" /><rect x="15.5" y="5.5" width="3" height="13" rx="1" className="cut" /></svg>
         <span>Query Studio <b>Social</b></span>
       </a>
@@ -127,7 +127,7 @@ export function Social() {
 
     <footer className="foot">
       <p>Sample data from {GENERATED}. Other players are anonymised; the review game is made up to show the method.</p>
-      <p><a href="../">Open the full Query Studio</a> to build your own queries and dashboards.</p>
+      <p><a href="https://bijanp24.github.io/query-studio/">Open the full Query Studio</a> to build your own queries and dashboards.</p>
     </footer>
 
     {shot && <div className="sheet" role="dialog" aria-modal="true" aria-label="Your image" onClick={e => { if (e.target === e.currentTarget) close(); }}>
