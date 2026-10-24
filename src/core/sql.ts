@@ -27,6 +27,8 @@ function aggSQL(agg: Agg, e: string, d: Dialect): string {
       return d === 'duckdb' ? `QUANTILE_CONT(${e}, ${p})` : d === 'bigquery' ? `APPROX_QUANTILES(${e}, 4)[OFFSET(${agg === 'p25' ? 1 : 3})]` : `PERCENTILE_CONT(${p}) WITHIN GROUP (ORDER BY ${e})`;
     }
     case 'iqr': return `(${aggSQL('p75', e, d)} - ${aggSQL('p25', e, d)})`;
+    // Ordered-set MODE takes the smallest value on ties, as the engine does; BigQuery's top count does not promise that.
+    case 'mode': return d === 'bigquery' ? `APPROX_TOP_COUNT(${e}, 1)[OFFSET(0)].value` : `MODE() WITHIN GROUP (ORDER BY ${e})`;
     case 'min': return `MIN(${e})`;
     case 'max': return `MAX(${e})`;
     case 'count': return 'COUNT(*)';
@@ -40,6 +42,7 @@ function aggSQL(agg: Agg, e: string, d: Dialect): string {
 interface SqlMeasure { agg: Agg; x: string; w?: string; d?: string }
 function measureSQL(m: SqlMeasure, d: Dialect, notes?: string[]): string {
   const { x, w } = m;
+  if (m.agg === 'mode' && d === 'redshift') notes?.push('Redshift has no MODE aggregate; run this query on DuckDB, PostgreSQL or BigQuery.');
   if (m.agg === 'ratio') {
     const den = m.d || '1';
     return `SUM(CASE WHEN ${den} IS NOT NULL THEN ${x} END) / NULLIF(SUM(CASE WHEN ${x} IS NOT NULL THEN ${den} END), 0)`;
@@ -50,6 +53,7 @@ function measureSQL(m: SqlMeasure, d: Dialect, notes?: string[]): string {
       case 'sum': return `SUM(${x} * ${w})`;
       case 'count': return `SUM(${w})`;
       case 'median': notes?.push('Weighted median has no portable SQL form; the SQL shows the unweighted median.'); break;
+      case 'mode': notes?.push('Weighted mode has no portable SQL form; the SQL shows the unweighted mode.'); break;
     }
   }
   return aggSQL(m.agg, x, d);

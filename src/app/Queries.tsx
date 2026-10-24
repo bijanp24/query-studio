@@ -9,7 +9,7 @@ import { Check, Collapsible, FiltersEditor, Num, Row, Sel, Txt, fieldOptions, ui
 import { Viz, VIZ_TYPES, autoType } from './viz/charts';
 import { Ask } from './Ask';
 
-const AGGS: Agg[] = ['avg', 'sum', 'count', 'median', 'p25', 'p75', 'iqr', 'min', 'max', 'rate', 'ratio', 'count_values', 'count_distinct'];
+const AGGS: Agg[] = ['avg', 'sum', 'count', 'median', 'p25', 'p75', 'iqr', 'mode', 'min', 'max', 'rate', 'ratio', 'count_values', 'count_distinct'];
 const GRAINS: [TimeGrain, string][] = [['none', 'exact value'], ['hour', 'hour of day'], ['day', 'day'], ['weekday', 'weekday'], ['week', 'week'], ['month', 'month'], ['quarter', 'quarter'], ['year', 'year']];
 const SERIES: [SeriesOp, string][] = [['none', 'none: one number'], ['rolling', 'rolling aggregate'], ['delta', 'change vs previous window (Δ)'], ['slope', 'rate of change (d/dt, slope)'], ['cumulative', 'running total (∫)']];
 const SORTS: [NonNullable<Query['sort']>, string][] = [['count_desc', 'most rows first'], ['value_desc', 'highest value first'], ['value_asc', 'lowest value first'], ['key_asc', 'by group name / time']];

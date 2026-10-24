@@ -119,8 +119,8 @@ export interface Dataset {
   grain?: string;
 }
 
-/** p25 / p75 are the 25th and 75th percentiles (SQL PERCENTILE_CONT); iqr is p75 − p25, the spread of the middle half. */
-export type Agg = 'sum' | 'avg' | 'median' | 'p25' | 'p75' | 'iqr' | 'min' | 'max' | 'count' | 'count_values' | 'count_distinct' | 'rate' | 'ratio';
+/** p25 / p75 are the 25th and 75th percentiles (SQL PERCENTILE_CONT); iqr is p75 − p25, the spread of the middle half; mode is the most common value (ties: the smallest). */
+export type Agg = 'sum' | 'avg' | 'median' | 'p25' | 'p75' | 'iqr' | 'mode' | 'min' | 'max' | 'count' | 'count_values' | 'count_distinct' | 'rate' | 'ratio';
 /**
  * How a measure rolls up. Additive measures (CS, kills, area, value×area) sum across any dimension;
  * semi-additive ones (a balance, a rank snapshot) sum across some dimensions but not time;
@@ -221,7 +221,7 @@ export interface Query {
 
 export type VizType =
   | 'kpi' | 'gauge' | 'bar' | 'column' | 'line' | 'area' | 'hist' | 'scatter'
-  | 'heatmap' | 'table' | 'sparktable' | 'trend' | 'card' | 'profile' | 'ribbon' | 'distribution' | 'flow';
+  | 'heatmap' | 'table' | 'sparktable' | 'trend' | 'card' | 'profile' | 'ribbon' | 'distribution' | 'flow' | 'mode';
 
 /**
  * The population a distribution is drawn against. Its rows are binned by the query's group-by field
@@ -264,6 +264,11 @@ export interface Visualization {
   /** distribution: what if this share (0 to 50, percent) of the group is shown below its median but
    *  belongs above it, such as smurfs among the players met. The tile shows the range the median can move. */
   hidden?: { share: number; label?: string };
+  /** mode: effN = sample size the chance band is drawn at (smaller than the row count when rows come in
+   *  clusters, such as ten players per game); deff = design effect, the row count divided by it (used when
+   *  effN is empty, so it follows the query's filters); level = band coverage in percent (default 99); sims = random
+   *  samples drawn (default 1000); rows = ranking rows shown before "show all" (default 10). */
+  mode?: { effN?: number; deff?: number; level?: number; sims?: number; rows?: number };
 }
 
 export interface Tile { id: string; vizId: string; width?: 2 | 3 | 4 | 6 }

@@ -6,6 +6,8 @@ The first build is a single-page web app with two example workspaces: League of 
 
 Every push to main deploys the static build to GitHub Pages (`.github/workflows/pages.yml`). That copy opens on the field-trials example; pick League of Legends in the workspace menu for the sample League data. Ask and live project files show a note that they need claude.ai.
 
+A third example, **Reviews**, runs the mode tools on synthetic 1-to-5 star ratings with a review bomb in them: the most common rating, the next, peaks, and which ratings are more common than random samples of the earlier reviews allow.
+
 The League workspace includes a "Player profile" dashboard: Baseline, Consistency, Peak and Trend for any measure, with suggested questions under the Ask box that guide new users. "Who I play: rank distribution" draws the rank of everyone a player has met against the whole NA ladder, and "Rank tracking" follows those players and the user's own accounts across rank snapshots.
 
 **New here? Read the [user guide](docs/guide/README.md)**: getting started, loading your own data, building queries, choosing visualizations, assembling dashboards, Ask, the Player profile, and running it locally. The app links to it from the **Guide** button in the top bar.

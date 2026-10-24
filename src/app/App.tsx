@@ -3,6 +3,7 @@ import type { Workspace } from '../core/types';
 import type { ItemState } from '../core/load';
 import { lolWorkspace } from '../seeds/lol';
 import { fieldTrialsWorkspace } from '../seeds/fieldtrials';
+import { reviewsWorkspace } from '../seeds/reviews';
 import { AppCtx, type App as AppT, type Tab } from './ctx';
 import { build, loadItems, refreshManual } from './data';
 import { prefs, saveFile, textStore, type TextStore } from './platform';
@@ -17,7 +18,7 @@ import { Check, Sel, Txt, uid } from './ui';
 // The workspace a first visit opens: League on claude.ai, the field-trials example on static hosting,
 // where the League snapshot is not published.
 declare const __DEFAULT_WS__: string;
-const SEEDS: Record<string, () => Workspace> = { lol: lolWorkspace, fieldtrials: fieldTrialsWorkspace };
+const SEEDS: Record<string, () => Workspace> = { lol: lolWorkspace, fieldtrials: fieldTrialsWorkspace, reviews: reviewsWorkspace };
 interface RegEntry { id: string; name: string }
 const GUIDE_URL = 'https://github.com/bijanp24/query-studio/blob/main/docs/guide/README.md';
 const TABS: [Tab, string][] = [['dashboards', 'Dashboards'], ['queries', 'Queries'], ['visualizations', 'Visualizations'], ['sources', 'Data sources'], ['datasets', 'Datasets'], ['model', 'Semantic model']];
@@ -127,7 +128,7 @@ export function App() {
   const resetSeed = () => { const s = SEEDS[ws.id]; if (!s) return; setItems({}); defsRef.current = {}; setGen(g => g + 1); const w = s(); setWs(w); update(x => x); setNewer(false); toast('Reset to the example'); };
   const deleteWs = async () => { const s = await textStore(); await s.del('ws_' + ws.id).catch(() => undefined); const r = registry.filter(x => x.id !== ws.id); setRegistry(r); s.put('registry', JSON.stringify(r)).catch(() => undefined); setMenu(null); openWs('lol', s); };
 
-  const wsOptions: [string, string][] = [['lol', 'League of Legends'], ['fieldtrials', 'Field trials (example)'], ...registry.filter(r => !SEEDS[r.id]).map(r => [r.id, r.name] as [string, string])];
+  const wsOptions: [string, string][] = [['lol', 'League of Legends'], ['fieldtrials', 'Field trials (example)'], ['reviews', 'Reviews (example)'], ...registry.filter(r => !SEEDS[r.id]).map(r => [r.id, r.name] as [string, string])];
   if (!wsOptions.some(o => o[0] === ws.id)) wsOptions.push([ws.id, ws.name]);
 
   return <AppCtx.Provider value={app}>
@@ -146,7 +147,7 @@ export function App() {
     {menu === 'import' && <div className="banner"><span>Workspace file (.json, from Export)</span><input type="file" accept=".json,application/json" onChange={e => { const f = e.target.files?.[0]; if (f) importWs(f); }} /><button className="ghost" onClick={() => setMenu(null)}>Cancel</button></div>}
     {menu === 'delete' && <div className="banner"><span>Delete “{ws.name}” and its saved queries, visualizations and dashboards?</span><button className="danger" onClick={deleteWs}>Delete workspace</button><button className="ghost" onClick={() => setMenu(null)}>Keep</button></div>}
     {newer && <div className="banner"><span>A newer version of this example exists.</span><button onClick={resetSeed}>Reset to it</button><button className="ghost" onClick={() => setNewer(false)}>Keep mine</button></div>}
-    {ws.example && <div className="banner info small">Example data: synthetic crop trials built to show the same system working outside League. Nothing here is a real farm.</div>}
+    {ws.example && <div className="banner info small">Example data: {ws.id === 'reviews' ? 'synthetic star ratings built to show the mode tools on reviews. No title, reviewer or review here is real.' : 'synthetic crop trials built to show the same system working outside League. Nothing here is a real farm.'}</div>}
     <nav className="tabs main" role="tablist">{TABS.map(([t, n]) => <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? 'on' : ''} onClick={() => go(t)}>{n}</button>)}</nav>
     <main>
       {tab === 'dashboards' && <Dashboards />}

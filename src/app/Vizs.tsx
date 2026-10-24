@@ -50,7 +50,7 @@ export function Vizs() {
             <Row label="Width"><Sel value={String(v.width)} onChange={x => set({ width: Number(x) as Visualization['width'] })} options={[['2', 'a third'], ['3', 'half'], ['4', 'two thirds'], ['6', 'full width']]} /></Row>
             {['line', 'area', 'trend', 'sparktable', 'profile', 'ribbon'].includes(v.type) && <Row label="Rolling window" hint="Rows per point when the query has no series operator of its own."><Num className="n8" value={v.window} min={2} onChange={x => set({ window: x || 10 })} /></Row>}
             {v.type === 'scatter' && q && <Row label="Horizontal axis"><Sel value={v.x || ''} blank="pick a field" onChange={x => set({ x })} options={fieldOptions(fieldsFor(ws, q.dataset, cat.tables[q.dataset]), app.showHidden, ['measure'])} /></Row>}
-            {v.type === 'distribution' && <DistEditor v={v} set={set} />}
+            {(v.type === 'distribution' || v.type === 'mode') && <DistEditor v={v} set={set} />}
             {v.type === 'profile' && <Row label="Trend per" hint="The trend is reported as the change per this many rows."><Num className="n8" value={v.per ?? 100} min={1} onChange={x => set({ per: x || 100 })} /></Row>}
             {v.type === 'column' && <Row label="Options"><Check checked={v.stack} onChange={x => set({ stack: x })}>stack the second group</Check></Row>}
             <Row label="Labels"><Check checked={v.labels !== false} onChange={x => set({ labels: x })}>show value labels</Check></Row>
@@ -76,8 +76,13 @@ function DistEditor({ v, set }: { v: Visualization; set: (p: Partial<Visualizati
       <Row label="Reference label"><Txt value={d.label} onChange={x => setD({ label: x || undefined })} placeholder={ws.datasets.find(x => x.id === d.dataset)?.name} /></Row>
       <Row label="Reference filters"><FiltersEditor filters={d.filters || []} onChange={f => setD({ filters: f })} fields={rf} showHidden={showHidden} /></Row>
     </>}
-    <Row label="Hidden share (%)" hint="What if this share of the group is shown below its median but belongs above it, such as smurfs among the players you meet. The tile shows how far the median can move. Empty: off."><Num className="n8" value={v.hidden?.share} min={0} max={50} onChange={x => set({ hidden: x == null ? undefined : { ...v.hidden, share: x } })} /></Row>
-    {v.hidden && <Row label="Call them"><Txt value={v.hidden.label} onChange={x => set({ hidden: { ...v.hidden!, label: x || undefined } })} placeholder="hidden" /></Row>}
+    {v.type === 'mode' && <>
+      <Row label="Effective sample size" hint="The sample size the chance band is drawn at. Use less than the row count when rows come in clusters (ten players per game, many reviews from one campaign). Empty: every row counts."><Num className="n8" value={v.mode?.effN} min={1} onChange={x => set({ mode: { ...v.mode, effN: x } })} /></Row>
+      <Row label="Design effect" hint="Instead of a fixed size: divide the row count by this (about 5 for players met ten per game). Empty: 1."><Num className="n8" value={v.mode?.deff} min={1} step={0.1} onChange={x => set({ mode: { ...v.mode, deff: x } })} /></Row>
+      <Row label="Band coverage (%)" hint="How much of the random samples the band holds. Empty: 99."><Num className="n8" value={v.mode?.level} min={50} max={99.9} step={0.1} onChange={x => set({ mode: { ...v.mode, level: x } })} /></Row>
+    </>}
+    {v.type === 'distribution' && <Row label="Hidden share (%)" hint="What if this share of the group is shown below its median but belongs above it, such as smurfs among the players you meet. The tile shows how far the median can move. Empty: off."><Num className="n8" value={v.hidden?.share} min={0} max={50} onChange={x => set({ hidden: x == null ? undefined : { ...v.hidden, share: x } })} /></Row>}
+    {v.type === 'distribution' && v.hidden && <Row label="Call them"><Txt value={v.hidden.label} onChange={x => set({ hidden: { ...v.hidden!, label: x || undefined } })} placeholder="hidden" /></Row>}
   </>;
 }
 
