@@ -9,6 +9,7 @@ import { ols, welch, mean, quantile } from '../../core/stats';
 import { compile, evaluate, toNum } from '../../core/expr';
 import { distribution, hiddenRange, ordinal, type BinCount, type DistSummary } from '../../core/distribution';
 import { flowOf, type FlowSummary } from '../../core/flow';
+import { modeFindings, modeOf } from '../../core/mode';
 import { profileOf, type Profile } from '../../core/profile';
 
 export const PALETTE = 8;
@@ -382,6 +383,52 @@ function Hidden({ d, label, g, what, share, setShare }: { d: DistSummary; label:
   </div>;
 }
 
+// ---------- the mode and the frequency ranking ----------
+/** Bins in their natural order with the reference outline and the chance band; the three most common numbered; then the ranking. */
+function ModeChart({ v, res, cat }: { v: Visualization; res: Result; cat: Catalog }) {
+  const { d, label, msg } = distOf(v, res, cat);
+  const [all, setAll] = React.useState(false);
+  const s = React.useMemo(() => d ? modeOf(d, { effN: v.mode?.effN, deff: v.mode?.deff, level: v.mode?.level, sims: v.mode?.sims }) : null, [d, v.mode?.effN, v.mode?.deff, v.mode?.level, v.mode?.sims]);
+  const W = useW();
+  if (!d || !s) return <Empty msg={msg || 'No rows match this query.'} />;
+  const H = 230, pl = 40, pr = 8, pt = 18, pb = 56, bins = s.ordered, bw = (W - pl - pr) / bins.length;
+  const hi = (Math.max(...bins.map(b => Math.max(b.share, b.refShare, b.hi ?? 0))) || 1) * 1.1;
+  const Y = (x: number) => pt + (1 - x / hi) * (H - pt - pb), X = (i: number) => pl + i * bw;
+  const pct = (x: number | null | undefined) => x == null ? '' : (x * 100).toFixed(x < 0.1 ? 1 : 0) + '%';
+  const g = res.grain, rot = bins.length > 8, [m1, m2, m3] = s.ranked;
+  const rows = all ? s.ranked : s.ranked.slice(0, v.mode?.rows || 10);
+  return <>
+    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${d.total} ${g}s by ${res.query.groupBy[0].field}; most common ${m1.key}${m2 ? `, then ${m2.key}` : ''}${m3 ? `, then ${m3.key}` : ''}`}>
+      {niceTicks(0, hi, 4).filter(t => t <= hi).map(tv => <g key={tv}><line x1={pl} x2={W - pr} y1={Y(tv)} y2={Y(tv)} className="grid" /><text x={pl - 4} y={Y(tv) + 4} textAnchor="end" className="ax">{Math.round(tv * 100)}%</text></g>)}
+      {bins.map((b, i) => <g key={b.key}>
+        <rect x={X(i) + 2} y={Y(b.share)} width={Math.max(1, bw - 4)} height={H - pb - Y(b.share)} rx={2} fill={color(v.color)} opacity={b.rank <= 3 ? 1 : 0.55}>
+          <title>{`#${b.rank} ${b.key}: ${b.n.toLocaleString()} ${g}s, ${pct(b.share)}${s.hasRef ? `; ${label} ${pct(b.refShare)} (#${b.refRank}); chance band ${pct(b.lo)} to ${pct(b.hi)}` : ''}`}</title></rect>
+        {s.hasRef && <path d={`M${X(i) + 1},${H - pb} V${Y(b.refShare)} H${X(i + 1) - 1} V${H - pb}`} fill="none" stroke="var(--text)" strokeWidth={1.5} />}
+        {b.lo != null && <g className="band"><line x1={X(i) + bw / 2} x2={X(i) + bw / 2} y1={Y(b.lo)} y2={Y(b.hi!)} stroke="var(--text-2)" strokeWidth={2} /><line x1={X(i) + bw / 2 - 4} x2={X(i) + bw / 2 + 4} y1={Y(b.hi!)} y2={Y(b.hi!)} stroke="var(--text-2)" strokeWidth={2} /><line x1={X(i) + bw / 2 - 4} x2={X(i) + bw / 2 + 4} y1={Y(b.lo)} y2={Y(b.lo)} stroke="var(--text-2)" strokeWidth={2} /></g>}
+        {b.rank <= 3 && <text x={X(i) + bw / 2} y={Y(Math.max(b.share, b.hi ?? 0)) - 4} textAnchor="middle" className="lab strong">{b.rank}</text>}
+        <text x={X(i) + bw / 2} y={H - pb + 12} textAnchor={rot ? 'end' : 'middle'} transform={rot ? `rotate(-45 ${X(i) + bw / 2} ${H - pb + 12})` : undefined} className={'lab' + (b.rank === 1 ? ' strong' : '')}>{b.key.slice(0, 12)}</text>
+      </g>)}
+    </svg>
+    <Legend items={[[color(v.color), `${d.total.toLocaleString()} ${g}s, share per bin; 1, 2, 3 = most common`], ...(s.hasRef ? [['var(--text)', `outline: ${label}`] as [string, string], ['var(--text-2)', `whisker: ${s.level}% of random samples of ${s.effN.toLocaleString()} from ${label}`] as [string, string]] : [])]} />
+    <div className="trendstats">
+      <div><div className="k">Mode (most common)</div><div className="v">{m1.key}</div><div className="small muted">{pct(m1.share)} of {g}s{s.hasRef ? `, ${pct(m1.refShare)} of ${label}` : ''}</div></div>
+      <div><div className="k">Then</div><div className="v">{[m2, m3].filter(Boolean).map(b => b.key).join(', ') || '—'}</div><div className="small muted">{[m2, m3].filter(Boolean).map(b => pct(b.share)).join(', ')}</div></div>
+      <div><div className="k">Peaks</div><div className="v">{s.peaks.length}{s.hasRef ? <span className="muted"> vs {s.refPeaks.length}</span> : null}</div><div className="small muted">{s.peaks.map(b => b.key).join(', ')}</div></div>
+      <div><div className="k">Bimodality</div><div className="v">{s.bimodality == null ? '—' : s.bimodality.toFixed(2)}{s.refBimodality != null ? <span className="muted"> vs {s.refBimodality.toFixed(2)}</span> : null}</div><div className="small muted">above 0.56 leans bimodal</div></div>
+    </div>
+    <ul className="findings small">{modeFindings(s, label || 'the reference', g).map((t, i) => <li key={i}>{t}</li>)}</ul>
+    <div className="tscroll"><table className="data">
+      <thead><tr><th className="num">#</th><th>{res.query.groupBy[0].field}</th><th className="num">{g}s</th><th className="num">share</th><th className="num">running</th>{s.hasRef && <><th className="num">{label}</th><th className="num">its #</th><th className="num">lift</th><th className="num">chance band</th><th>vs chance</th></>}</tr></thead>
+      <tbody>{rows.map(b => <tr key={b.key} className={b.flag === 'above' ? 'hl' : ''}>
+        <td className="num">{b.rank}</td><td>{b.key}{b.peak ? <span className="muted"> · peak</span> : null}</td><td className="num">{Math.round(b.n).toLocaleString()}</td><td className="num">{pct(b.share)}</td><td className="num muted">{pct(b.cumShare)}</td>
+        {s.hasRef && <><td className="num">{pct(b.refShare)}</td><td className="num muted">{b.refRank}</td><td className="num">{b.lift == null ? '—' : b.lift.toFixed(2) + '×'}</td><td className="num muted">{pct(b.lo)} to {pct(b.hi)}</td>
+          <td className={b.flag === 'above' ? 'bad' : b.flag === 'below' ? 'muted' : ''}>{b.flag === 'above' ? `more (+${Math.round(b.excess).toLocaleString()})` : b.flag === 'below' ? `fewer (${Math.round(b.excess).toLocaleString()})` : 'inside'}</td></>}
+      </tr>)}</tbody></table></div>
+    {s.ranked.length > rows.length || all ? <button className="ghost small" onClick={() => setAll(!all)}>{all ? 'Show the top ' + (v.mode?.rows || 10) : `Show all ${s.ranked.length}`}</button> : null}
+    {(W >= 700 || !s.hasRef || msg) && <div className="small muted">{!s.hasRef ? 'Pick a reference dataset to see what chance allows in each bin.' : `Chance band: the share each bin takes in ${s.sims.toLocaleString()} random samples of ${s.effN.toLocaleString()} drawn from ${label}${s.effN < d.total ? ` (an effective sample size: the ${d.total.toLocaleString()} ${g}s are clustered)` : ''}. Lift: share here ÷ share in ${label}. Rows over the band are what a cleaning step would need to explain.`}{msg ? ' ' + msg : ''}</div>}
+  </>;
+}
+
 function Scatter({ v, res, cat }: { v: Visualization; res: Result; cat: Catalog }) {
   const m = res.measures[0]; if (!m) return <Empty />;
   const fields = fieldsFor(cat.ws, res.datasetId, cat.tables[res.datasetId]);
@@ -734,6 +781,7 @@ export const VIZ_TYPES: { id: Visualization['type']; name: string; needs?: strin
   { id: 'table', name: 'Table' }, { id: 'sparktable', name: 'Trend table', needs: 'a group-by' }, { id: 'card', name: 'Comparison card' },
   { id: 'profile', name: 'Player card (baseline, consistency, peak, trend)' }, { id: 'ribbon', name: 'Ribbon (rolling baseline and spread)' },
   { id: 'distribution', name: 'Distribution vs a population', needs: 'one group-by (the bins) and a reference dataset' },
+  { id: 'mode', name: 'Mode and frequency ranking', needs: 'one group-by (the bins); a reference dataset adds the chance band' },
   { id: 'flow', name: 'Flow (where each group went)', needs: 'two group-bys: where rows started and where they ended up' },
 ];
 
@@ -771,6 +819,7 @@ function VizInner({ v, res, cat }: { v: Visualization; res: Result; cat: Catalog
     case 'ribbon': return <Ribbon v={v} res={res} cat={cat} />;
     case 'distribution': return <Distribution v={v} res={res} cat={cat} />;
     case 'flow': return <Flow v={v} res={res} cat={cat} />;
+    case 'mode': return <ModeChart v={v} res={res} cat={cat} />;
   }
   return <Empty msg={`Unknown visualization ${v.type}`} />;
 }

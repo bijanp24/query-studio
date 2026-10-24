@@ -88,6 +88,14 @@ export function aggregateParts(parts: Part[], agg: Agg, weighted: boolean, rowCo
     for (const p of parts) { const x = toNum(p.x); if (x != null && p.d != null) { sx += x; sd += p.d; n++; } }
     return n && sd !== 0 ? sx / sd : null;
   }
+  if (agg === 'mode') {
+    // Most common value, counted with weight when there is one; ties go to the smallest value.
+    const c = new Map<number, number>();
+    for (const p of parts) { const x = toNum(p.x), w = weighted ? p.w : 1; if (x != null && w != null) c.set(x, (c.get(x) || 0) + w); }
+    let best: number | null = null, bc = -Infinity;
+    for (const [x, n] of c) if (n > bc || (n === bc && x < best!)) { best = x; bc = n; }
+    return best;
+  }
   if (weighted && (agg === 'avg' || agg === 'rate' || agg === 'sum' || agg === 'median')) {
     const xs: [number, number][] = [];
     for (const p of parts) { const x = toNum(p.x); if (x != null && p.w != null) xs.push([x, p.w]); }

@@ -11,7 +11,9 @@ const FILES = ['my_matchups', 'my_games', 'player_games', 'roster', 'lobby_relat
   // the smurf test and the median sensitivity (data/scripts/hypothesis_test.py, smurf_median_sensitivity.py, smurf_qs_export.py); no Riot IDs
   'smurf_tests', 'smurf_test_summary', 'smurf_sweep', 'smurf_gap_hist', 'smurf_shape', 'smurf_lobby',
   // rank history of everyone met (data/scripts/build_rank_history.py): spells, interval milestones, daily coverage
-  'rank_history', 'rank_milestones', 'rank_coverage'];
+  'rank_history', 'rank_milestones', 'rank_coverage',
+  // the mode of the players met, per account and per snapshot day (data/scripts/met_rank_mode.py); no Riot IDs
+  'met_rank_mode_summary', 'met_rank_mode_by_day'];
 // Published with the app only: the NA ladder, rank snapshots of everyone met, and the user's own accounts over time.
 const BUNDLED_ONLY = ['ladder', 'rank_tracking', 'my_rank'];
 
@@ -88,12 +90,12 @@ export function lolWorkspace(): Workspace {
     {
       id: 'met_players', name: 'Players met: rank today', grain: 'player', feeds: both('met_rank_today', true), key: ['puuid'],
       description: 'Everyone who shared a game with you, on any account, with their solo-queue rank today (the newest rank snapshot or cached rank; rank_source says which and when). side = whether they were only on your team, only against you, or both.',
-      derived: [...rankColumns('tier_today', 'division_today'), { name: 'ladder_pct', expr: 'if(top_pct_today >= 0, 100 - top_pct_today, null)' }],
+      derived: [...rankColumns('tier_today', 'division_today'), { name: 'ladder_pct', expr: 'if(top_pct_today >= 0, 100 - top_pct_today, null)' }, { name: 'tier_step', expr: tierStep('tier_today') }, { name: 'tier_name', expr: tierName('tier_step') }],
     },
     {
       id: 'ladder', name: 'NA solo-queue ladder', grain: 'ladder division', feeds: [{ itemId: 'b_ladder', priority: 1 }], key: ['tier', 'division'],
       description: 'Every ranked NA solo-queue account counted per tier and division (Master capped at 10,000 in the source), with the ladder percentile range each division covers. The reference population for rank distributions.',
-      derived: [...rankColumns('tier', 'division'), { name: 'ladder_pct', expr: '(ladder_pct_low + ladder_pct_high) / 2' }],
+      derived: [...rankColumns('tier', 'division'), { name: 'ladder_pct', expr: '(ladder_pct_low + ladder_pct_high) / 2' }, { name: 'tier_step', expr: tierStep('tier') }, { name: 'tier_name', expr: tierName('tier_step') }],
     },
     {
       id: 'rank_tracking', name: 'Players met: rank over time', grain: 'rank snapshot', sequence: 'snapshot_date', key: ['puuid', 'snapshot_date'], feeds: [{ itemId: 'b_rank_tracking', priority: 1 }],
@@ -130,6 +132,10 @@ export function lolWorkspace(): Workspace {
       description: 'Each player in your Ranked Solo games: their rank today minus the median rank today of the other nine, in divisions, split by how many solo games they have played this season. Matchmaking pairs by hidden MMR, so a player far below their own lobby is rated above their shown rank.' },
     { id: 'smurf_shape', name: 'Smurfs and the median: shape check', grain: 'simulation', feeds: both('smurf_shape', true), key: ['true_distribution', 'smurf_share_pct'],
       description: 'Could a symmetric rank distribution hide smurfs? Start from a smurf-free distribution, demote a share of players by gaps drawn from real lobby gaps, and measure the skew of what would be shown. Observed skew of the players met: -0.03 (95% range -0.10 to +0.04).' },
+    { id: 'mode_summary', name: 'Mode of the players met: summary', grain: 'group', feeds: both('met_rank_mode_summary', true), key: ['group'],
+      description: 'Per account and for everyone met, with the NA ladder for comparison: the most common division, the 2nd and 3rd, the most common tier, the smoothed (one-division kernel) mode, median and mean, how often the mode holds when your games are resampled, peaks of the smoothed curve, and your own shown rank against the mode.' },
+    { id: 'mode_by_day', name: 'Mode of the players met: by snapshot day', grain: 'snapshot day × population', feeds: both('met_rank_mode_by_day', true), key: ['day', 'population'],
+      description: 'The mode, 2nd and 3rd most common division and the median on each rank snapshot day: everyone ranked that day, and a fixed panel of the players ranked on every day (so new players met do not move it).' },
     { id: 'smurf_lobby', name: 'Smurfs and the median: one lobby', grain: 'player slot', feeds: both('smurf_lobby', true), key: ['scenario', 'slot'],
       description: 'The ten ranks in one live game (Silver IV among Gold II to Plat IV), sorted, as shown and with the Silver IV played as Plat IV. The median of ten is the average of slots 5 and 6.' },
   ];
@@ -234,6 +240,21 @@ export function lolWorkspace(): Workspace {
     F('smurf_shape', 'fisher_skew', 'skew of the shown ranks', { agg: 'avg', format: 'decimal2', polarity: 'neutral' }),
     F('smurf_shape', 'excess_kurtosis', 'excess kurtosis', { agg: 'avg', format: 'decimal2', polarity: 'neutral' }),
     F('smurf_shape', 'inside_observed_range', 'inside the observed skew range', { agg: 'max', format: 'integer', polarity: 'neutral' }),
+    D('met_players', 'tier_name', 'tier', { sortBy: 'tier_step' }), D('ladder', 'tier_name', 'tier', { sortBy: 'tier_step' }),
+    D('mode_summary', 'group', 'group'), D('mode_summary', 'mode_division', 'most common division'), D('mode_summary', 'second', '2nd most common'), D('mode_summary', 'third', '3rd most common'),
+    D('mode_summary', 'mode_tier', 'most common tier'), D('mode_summary', 'kde_mode', 'smoothed mode'), D('mode_summary', 'median', 'median'), D('mode_summary', 'mean', 'mean'), D('mode_summary', 'own_rank', 'own shown rank'),
+    F('mode_summary', 'players', 'players', { agg: 'sum', format: 'integer', additivity: 'additive', polarity: 'neutral' }),
+    F('mode_summary', 'mode_share_pct', 'mode share (%)', { format: 'decimal1', polarity: 'neutral' }),
+    F('mode_summary', 'mode_boot_pct', 'mode holds when games are resampled (%)', { format: 'decimal1', polarity: 'neutral', description: 'Share of 1,000 resamples of your games (players come ten per game) in which the same division is still the most common.' }),
+    F('mode_summary', 'mode_ladder_pct_below', 'mode: share of the ladder below it (%)', { format: 'decimal1', polarity: 'neutral' }),
+    F('mode_summary', 'own_minus_mode_divisions', 'own rank minus the mode (divisions)', { format: 'decimal1', polarity: 'neutral' }),
+    F('mode_summary', 'kde_peaks_bw50', 'peaks, half-division smoothing', { format: 'integer', polarity: 'neutral' }),
+    F('mode_summary', 'kde_peaks_bw100', 'peaks, one-division smoothing', { format: 'integer', polarity: 'neutral' }),
+    D('mode_by_day', 'day', 'snapshot day'), D('mode_by_day', 'population', 'population'), D('mode_by_day', 'mode', 'most common division'),
+    D('mode_by_day', 'second', '2nd most common'), D('mode_by_day', 'third', '3rd most common'), D('mode_by_day', 'kde_mode', 'smoothed mode'), D('mode_by_day', 'median', 'median'),
+    F('mode_by_day', 'players', 'players', { agg: 'sum', format: 'integer', additivity: 'additive', polarity: 'neutral' }),
+    F('mode_by_day', 'mode_share_pct', 'mode share (%)', { format: 'decimal1', polarity: 'neutral' }),
+    F('mode_by_day', 'second_share_pct', '2nd share (%)', { format: 'decimal1', polarity: 'neutral' }),
     D('smurf_lobby', 'scenario', 'scenario'), D('smurf_lobby', 'rank', 'rank'), D('smurf_lobby', 'slot', 'slot (sorted)'),
     F('smurf_lobby', 'rank_points', 'rank points', { agg: 'median', format: 'integer', polarity: 'neutral' }),
   );
@@ -281,6 +302,14 @@ export function lolWorkspace(): Workspace {
     Q({ id: 'q_met_dist', name: 'Everyone I have played with or against, by rank today', dataset: 'met_players', last: 0, measures: m('players'), groupBy: [{ field: 'rank_label' }], filters: [{ field: 'rank_label', op: 'not_null', value: '' }] }),
     Q({ id: 'q_met_dist_enemy', name: 'My opponents, by rank today', dataset: 'met_players', last: 0, measures: m('players'), groupBy: [{ field: 'rank_label' }], filters: [{ field: 'rank_label', op: 'not_null', value: '' }, { field: 'side', op: 'in', value: 'enemy, both' }] }),
     Q({ id: 'q_met_dist_ally', name: 'My teammates, by rank today', dataset: 'met_players', last: 0, measures: m('players'), groupBy: [{ field: 'rank_label' }], filters: [{ field: 'rank_label', op: 'not_null', value: '' }, { field: 'side', op: 'in', value: 'ally, both' }] }),
+    Q({ id: 'q_mode_tier', name: 'Everyone I have played with or against, by tier today', dataset: 'met_players', last: 0, measures: m('players'), groupBy: [{ field: 'tier_name' }], filters: [{ field: 'rank_label', op: 'not_null', value: '' }] }),
+    Q({ id: 'q_mode_takin', name: 'Players met on takinturrets, by rank today', dataset: 'met_players', last: 0, measures: m('players'), groupBy: [{ field: 'rank_label' }], filters: [{ field: 'rank_label', op: 'not_null', value: '' }, { field: 'seen_on', op: 'contains', value: 'takinturrets' }] }),
+    Q({ id: 'q_mode_asd', name: 'Players met on asd123456efg, by rank today', dataset: 'met_players', last: 0, measures: m('players'), groupBy: [{ field: 'rank_label' }], filters: [{ field: 'rank_label', op: 'not_null', value: '' }, { field: 'seen_on', op: 'contains', value: 'asd123456efg' }] }),
+    Q({ id: 'q_mode_velo', name: 'Players met on Velocoraptor, by rank today', dataset: 'met_players', last: 0, measures: m('players'), groupBy: [{ field: 'rank_label' }], filters: [{ field: 'rank_label', op: 'not_null', value: '' }, { field: 'seen_on', op: 'contains', value: 'Velocoraptor' }] }),
+    Q({ id: 'q_mode_summary', name: 'Mode of the players met, per account and vs the ladder', dataset: 'mode_summary', last: 0, groupBy: [{ field: 'group' }, { field: 'mode_division' }, { field: 'second' }, { field: 'third' }, { field: 'kde_mode' }, { field: 'median' }, { field: 'own_rank' }],
+      measures: [{ field: 'mode_share_pct' }, { field: 'mode_boot_pct' }, { field: 'mode_ladder_pct_below' }, { field: 'own_minus_mode_divisions' }, { field: 'players' }] }),
+    Q({ id: 'q_mode_day', name: 'Mode of the players met by snapshot day', dataset: 'mode_by_day', last: 0, groupBy: [{ field: 'day' }, { field: 'population' }, { field: 'mode' }, { field: 'second' }, { field: 'third' }, { field: 'median' }],
+      measures: [{ field: 'mode_share_pct' }, { field: 'second_share_pct' }, { field: 'players' }], sort: 'key_asc' }),
     Q({ id: 'q_met_ladder_pct', name: 'Players met: ladder percentile today', dataset: 'met_players', last: 0, measures: m('ladder_pct') }),
     Q({ id: 'q_met_side', name: 'Players met by side: ladder percentile today', dataset: 'met_players', last: 0, measures: [{ field: 'ladder_pct', agg: 'p25', label: 'lower quartile' }, { field: 'ladder_pct', label: 'median' }, { field: 'ladder_pct', agg: 'p75', label: 'upper quartile' }, { field: 'players' }], groupBy: [{ field: 'side' }], sort: 'key_asc' }),
     // Rank tracking
@@ -336,6 +365,15 @@ export function lolWorkspace(): Workspace {
     V({ id: 'v_met_dist', name: 'Who I actually play: rank today vs the NA ladder', queryId: 'q_met_dist', type: 'distribution', color: 5, width: 6, dist: { dataset: 'ladder', label: 'the NA ladder' }, note: 'Bars: everyone who shared a game with you, all accounts lumped, by rank today. Outline: every ranked NA solo-queue account. Unranked players are left out.' }),
     V({ id: 'v_met_dist_enemy', name: 'Opponents vs the ladder', queryId: 'q_met_dist_enemy', type: 'distribution', color: 8, width: 3, dist: { dataset: 'ladder', label: 'the NA ladder' } }),
     V({ id: 'v_met_dist_ally', name: 'Teammates vs the ladder', queryId: 'q_met_dist_ally', type: 'distribution', color: 2, width: 3, dist: { dataset: 'ladder', label: 'the NA ladder' } }),
+    V({ id: 'v_mode_all', name: 'The mode: which rank I meet most, then the next', queryId: 'q_met_dist', type: 'mode', color: 5, width: 6, dist: { dataset: 'ladder', label: 'the NA ladder' }, mode: { deff: 5 },
+      note: 'Bars in ladder order; 1, 2, 3 mark the most common ranks. Whiskers: what random samples of the ladder of the same effective size look like (design effect 5: players come ten per game). The ranking below goes all the way down.' }),
+    V({ id: 'v_mode_tier', name: 'The mode by tier', queryId: 'q_mode_tier', type: 'mode', color: 5, width: 3, dist: { dataset: 'ladder', label: 'the NA ladder' }, mode: { deff: 5, rows: 6 } }),
+    V({ id: 'v_mode_takin', name: 'takinturrets: the mode', queryId: 'q_mode_takin', type: 'mode', color: 1, width: 3, dist: { dataset: 'ladder', label: 'the NA ladder' }, mode: { deff: 5, rows: 5 } }),
+    V({ id: 'v_mode_asd', name: 'asd123456efg: the mode', queryId: 'q_mode_asd', type: 'mode', color: 2, width: 3, dist: { dataset: 'ladder', label: 'the NA ladder' }, mode: { deff: 5, rows: 5 } }),
+    V({ id: 'v_mode_velo', name: 'Velocoraptor: the mode', queryId: 'q_mode_velo', type: 'mode', color: 3, width: 3, dist: { dataset: 'ladder', label: 'the NA ladder' }, mode: { deff: 5, rows: 5 } }),
+    V({ id: 'v_mode_summary', name: 'Mode, median and mean, and my rank against the mode', queryId: 'q_mode_summary', type: 'table', width: 6,
+      note: 'Smoothed mode = the top of the rank curve smoothed over one division, which is not pulled toward the IV divisions where demotion protection piles players up. "Holds" = share of resamples of your games with the same mode.' }),
+    V({ id: 'v_mode_day', name: 'The mode on each snapshot day', queryId: 'q_mode_day', type: 'table', width: 6, note: 'Fixed panel: only players ranked on every day, so a change is players moving, not new players met.' }),
     V({ id: 'v_met_pct_hist', name: 'Players met: ladder percentile, median and middle half', queryId: 'q_met_ladder_pct', type: 'hist', color: 5, width: 3, note: 'Against the ladder itself this would be flat: every percentile holds 1% of ranked players.' }),
     V({ id: 'v_met_side', name: 'Opponents vs teammates: ladder percentile', queryId: 'q_met_side', type: 'table', width: 3, note: '"both" = met on your team in one game and against you in another.' }),
     V({ id: 'v_track_by_date', name: 'Players met: ladder percentile at each snapshot', queryId: 'q_track_by_date', type: 'table', width: 3, note: 'Rows before the first daily snapshot are the cached ranks the met-rank table used, a different subset of players each day. From the daily snapshots on, every row covers everyone met.' }),
@@ -475,6 +513,7 @@ export function lolWorkspace(): Workspace {
     { id: 'd_profile', name: 'Player profile', filters: [], tiles: T(['v_profile', 'v_lobby_ribbon', 'v_cs_ribbon', 'v_met_hist', 'v_lobby_acct']) },
     { id: 'd_matchups', name: 'Champions & matchups', filters: [], tiles: T(['v_champ_wr', 'v_gp', 'v_kda_champ', 'v_heat']) },
     { id: 'd_met_rank', name: 'Who I play: rank distribution', description: 'The rank of everyone you have played with or against, against the whole ladder.', filters: [], tiles: T(['v_met_dist', 'v_met_dist_enemy', 'v_met_dist_ally', 'v_met_pct_hist', 'v_met_side']) },
+    { id: 'd_mode', name: 'Who I play: the mode', description: 'The rank you meet most often, then the next most common and so on, per account, against the ladder and against random samples of it.', filters: [], tiles: T(['v_mode_all', 'v_mode_summary', 'v_mode_tier', 'v_mode_takin', 'v_mode_asd', 'v_mode_velo', 'v_mode_day']) },
     { id: 'd_smurf_test', name: 'Smurf test: both hypotheses', description: 'Every investigated player tested both ways: assume they play at their shown rank, and assume they are a smurf.', filters: [], tiles: T(['v_st_summary', 'v_st_weight', 'v_st_evidence']) },
     { id: 'd_smurf_median', name: 'Smurfs and the median', description: 'How hidden smurfs below the median would move the median and shape of the ranks of the players you meet.', filters: [], tiles: T(['v_met_hidden', 'v_sm_sweep', 'v_sm_table', 'v_sm_lobby', 'v_sm_gap', 'v_sm_shape']) },
     { id: 'd_rank_player', name: 'Rank history: one player', description: 'Current and past rank of one player (pick them with the player filter), at fixed intervals after you met them.', filters: [{ field: 'riot_id', op: '=', value: 'takinturrets#NA1' }], tiles: T(['v_rh_line', 'v_rh_profile', 'v_rh_ms', 'v_rh_spells']) },
@@ -491,11 +530,12 @@ export function lolWorkspace(): Workspace {
       'Player profile: lobby_level = where the other nine players sit on the ladder (0-100 percentile, rank as of the pull). Baseline, consistency, peak and trend of any measure = viz type profile (one card per measure, no groupBy, last 0); a rolling baseline with its spread = viz type ribbon. Use agg median for per-game stats when the user asks for baseline or consistency; p25, p75 and iqr are available. roster.ladder_pct = each player met, ladder percentile today.',
       'Rank distribution: met_players = one row per player met with their rank today (rank_label in ladder order via rank_step, ladder_pct 0-100, side = ally / enemy / both). ladder = the NA solo-queue ladder, one row per division with players = accounts. "Rank of the players I play", "vs the ladder" → query met_players, measures [players], groupBy rank_label, filter rank_label not_null, last 0, visualization distribution with reference ladder. rank_tracking = one row per player met per rank snapshot (ladder_change, divisions_moved, moved_up compare with that player\'s previous snapshot). Rank flow = viz type flow on rank_tracking grouped by [prev_tier_name, tier_name] (or [prev_rank_label, rank_label] for divisions), measure players. my_rank = the user\'s own accounts over time (ladder_pct); baseline, consistency, peak and trend of the user\'s rank = profile on my_rank filtered to one account_name.',
       'Smurf test: smurf_tests = one row per evidence item per investigated player (case_name, evidence, log10_lr + = smurf, p_value_if_not_smurf, p_value_if_smurf); smurf_test_summary = one row per player (p_if_not_smurf, p_if_smurf, bayes_factor, posterior_smurf). smurf_sweep = median of the players met when a share (smurf_share_pct) of players below the median are smurfs, by scenario (headline = 1 for the four main ones). smurf_gap_hist = rank vs own lobby by season games group. smurf_shape = skew of shown ranks with hidden smurfs.',
-      'Rank history: rank_history = one row per player per rank spell (valid_from, rank_score, ladder_pct, points_change since the previous spell). rank_milestones = rank at fixed intervals after an anchor: anchor = met (day of the first shared game) or tracked (first day observed); milestone = at anchor, +2 weeks, +1 month, +3 months, +6 months, +1 year, latest; status = observed / carried / nearest / missed / pending / before_tracking; only observed, carried and nearest have a rank. divisions_since_anchor = movement since the anchor. rank_coverage = per day, share of players met whose rank was observed. One player → dashboard filter riot_id. A distribution viz with hidden {share, label} shows how far the median can move if that share are smurfs.',
+      'Rank history: rank_history = one row per player per rank spell (valid_from, rank_score, ladder_pct, points_change since the previous spell). rank_milestones = rank at fixed intervals after an anchor: anchor = met (day of the first shared game) or tracked (first day observed); milestone = at anchor, +2 weeks, +1 month, +3 months, +6 months, +1 year, latest; status = observed / carried / nearest / missed / pending / before_tracking; only observed, carried and nearest have a rank. divisions_since_anchor = movement since the anchor. rank_coverage = per day, share of players met whose rank was observed. One player → dashboard filter riot_id. A distribution viz with hidden {share, label} shows how far the median can move if that share are smurfs. The mode (most common rank, then the next): viz type mode on the same query as the distribution, reference ladder; set mode.deff 5 for players met (ten per game). mode_summary / mode_by_day = the mode tables from the pipeline per account and per snapshot day.',
       'game_weight = the user\'s highlight weight per game (1 when unset); highlighted = 1 for games weighted above 1. "Showcase", "highlight", "my best games" → weight game_weight or filter highlighted = 1. Weighting schemes are fields with role weight (w_learning_curve, w_main_role, w_support_half, w_duration, w_highlights); set query.weight to a weight field id or to an expression such as if(position = \'UTILITY\', 0.5, 1) or if(champion = \'Riven\' and champ_game_no > 150, 2, 1). champ_game_no = the Nth game on that champion in this history; champ_experience buckets it; hard_champion = 1 for mechanically hard champions. Time-weighted CS/min = field cs_per_min_tw (ratio of total CS to total minutes). enemy_jg_ganks_pre15 exists only for the user\'s own games.',
     ].join('\n'),
     suggestions: [
       { text: 'What rank are the players I actually play with and against?', vizId: 'v_met_dist' },
+      { text: 'Which rank do I meet most often, and which next?', vizId: 'v_mode_all' },
       { text: 'Are my opponents ranked higher than my teammates?', vizId: 'v_met_side' },
       { text: 'Where did the players I met move between snapshots?', vizId: 'v_flow_tier' },
       { text: 'How have the players I met moved since the last snapshot?', vizId: 'v_track_change' },
@@ -512,6 +552,6 @@ export function lolWorkspace(): Workspace {
       { text: 'My peak 20-game stretch for solo kills, and when it was' },
       { text: 'Are my solo kills rising while my lobby level stays flat?' },
     ],
-    sources, items, datasets, fields, queries, visualizations: vizs, dashboards, activeDashboard: 'd_lens', seedVersion: 5,
+    sources, items, datasets, fields, queries, visualizations: vizs, dashboards, activeDashboard: 'd_lens', seedVersion: 6,
   };
 }

@@ -13,11 +13,12 @@ Open it at **https://bijanp24.github.io/query-studio/**, or see [Where it runs](
 1. [Getting started](getting-started.md): the screen layout, workspaces, and a five-minute tour.
 2. [Bring your own data](your-data.md): upload CSV, JSON or Excel, merge tables into a dataset, and name your fields.
 3. [Build a query](queries.md): measures, filters, grouping, weights, comparisons and trends.
-4. [Choose a visualization](visualizations.md): the 15 tile types and when each one fits.
+4. [Choose a visualization](visualizations.md): the tile types and when each one fits.
 5. [Assemble a dashboard](dashboards.md): tiles, widths, drag and drop, and dashboard-wide filters.
 6. [Ask and suggested questions](ask.md): type a question in plain English and get a query back.
 7. [Read the Player profile](player-profile.md): Baseline, Consistency, Peak and Trend.
    - [Read the smurf test](smurf-test.md): every investigated player tested both ways, and how hidden smurfs move the median.
+   - [The mode: what is most common, then the next](mode.md): frequency ranking, peaks and what chance allows, for ranks or star ratings (review bombing).
    - [Track rank over time](rank-history.md): rank on the day you met each player and at fixed intervals after, for one player or everyone met.
 8. [Where it runs](where-it-runs.md): GitHub Pages, your own machine, and claude.ai, and where your work is saved.
 

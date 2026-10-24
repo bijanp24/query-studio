@@ -42,7 +42,7 @@ export interface ResolvedMeasure {
   additivity: 'additive' | 'semi_additive' | 'non_additive';
 }
 
-const WEIGHTABLE = new Set<Agg>(['avg', 'rate', 'sum', 'count', 'median']);
+const WEIGHTABLE = new Set<Agg>(['avg', 'rate', 'sum', 'count', 'median', 'mode']);
 export const weightable = (a: Agg) => WEIGHTABLE.has(a);
 
 /** Turn a measure reference into what the engine and the SQL compiler need. queryWeight overrides a field's default weight. */
@@ -89,5 +89,5 @@ export function fieldType(name: string, fields: Field[], table?: Table): ColumnT
 }
 
 export function aggLabel(a: Agg) {
-  return ({ sum: 'sum', avg: 'average', median: 'median', p25: '25th percentile', p75: '75th percentile', iqr: 'middle-half spread (p75 − p25)', min: 'min', max: 'max', count: 'count of rows', count_values: 'count of values', count_distinct: 'distinct count', rate: 'rate', ratio: 'ratio of sums' } as Record<Agg, string>)[a];
+  return ({ sum: 'sum', avg: 'average', median: 'median', p25: '25th percentile', p75: '75th percentile', iqr: 'middle-half spread (p75 − p25)', mode: 'most common value', min: 'min', max: 'max', count: 'count of rows', count_values: 'count of values', count_distinct: 'distinct count', rate: 'rate', ratio: 'ratio of sums' } as Record<Agg, string>)[a];
 }

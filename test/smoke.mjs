@@ -21,7 +21,7 @@ await p.goto('http://localhost:8765/');
 await p.waitForTimeout(4000);
 console.log('saved label at load:', await p.innerText('.saved'));
 const tabs = ['Dashboards', 'Queries', 'Visualizations', 'Data sources', 'Datasets', 'Semantic model'];
-for (const ws of ['lol', 'fieldtrials']) {
+for (const ws of ['lol', 'fieldtrials', 'reviews']) {
   await p.selectOption('select.wssel', ws); await p.waitForTimeout(3500);
   for (const t of tabs) {
     await p.click('nav.tabs.main button:has-text("' + t + '")'); await p.waitForTimeout(700);

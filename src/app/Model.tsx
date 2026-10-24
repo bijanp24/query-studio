@@ -5,7 +5,7 @@ import { fieldsFor, inferFields, aggLabel } from '../core/semantic';
 import { Badge, Check, Sel, Txt, uid } from './ui';
 import { ExprHint } from './Queries';
 
-const AGGS: Agg[] = ['avg', 'sum', 'count', 'median', 'p25', 'p75', 'iqr', 'min', 'max', 'rate', 'ratio', 'count_values', 'count_distinct'];
+const AGGS: Agg[] = ['avg', 'sum', 'count', 'median', 'p25', 'p75', 'iqr', 'mode', 'min', 'max', 'rate', 'ratio', 'count_values', 'count_distinct'];
 const FORMATS: [Format, string][] = [['number', 'auto'], ['integer', '1,234'], ['decimal1', '1.2'], ['decimal2', '1.23'], ['percent', '12.3%']];
 
 export function Model() {

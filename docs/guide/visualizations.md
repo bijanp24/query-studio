@@ -17,7 +17,7 @@ Then set:
 | Setting | What it does |
 | --- | --- |
 | Query | Which saved query it draws. **Edit this query** jumps to it. |
-| Type | One of the 15 types below. |
+| Type | One of the types below. |
 | Color | One of eight colours that read in light and dark mode. |
 | Width | The default tile width: a third, half, two thirds or full. A dashboard can override it per tile. |
 | Labels | Show values on bars and points. |
@@ -63,6 +63,7 @@ The editor previews the tile as you go. **Add to "…"** puts it on the dashboar
 | **Histogram** | One measure over many rows | How the values are spread. Needs at least three rows. "Players met: ladder percentile today" is one. |
 | **Scatter** | One measure against another field | Set **Horizontal axis**. Maize yield against nitrogen is one. |
 | **Player card** | One or more measures, no group-by | Baseline, Consistency, Peak and Trend for each measure. See [Player profile](player-profile.md). |
+| **Mode and frequency ranking** | One group-by (the values) and a count; a reference dataset adds the chance band | The most common value, then the next and so on, with peaks and the values more common than chance. See [The mode](mode.md). |
 
 If you are unsure, leave the preview on **auto** in the query builder. It picks a KPI for a single number, a line for a series, bars for one group-by (columns when it is by time), and for two group-bys a heatmap when one is by time or a table otherwise.
 
